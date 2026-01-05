@@ -11,7 +11,7 @@ The primary goal of this project is to simulate the textual transmission of the 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
 
 -   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
-    -   `model.py`: Will define the simulation model, its states, and transitions.
+    -   `model.py`: Defines the core data structure for the textual state (the "tagged string") and provides factory functions to create, copy, and mutate it. A tagged string is a NumPy array of integers representing the sequence of readings (textual variants) in a witness instance.
     -   `rng.py`: Implements the centralized random number generation (RNG) factory. This factory ensures full reproducibility across runs and safe parallel execution by managing `numpy.random.Generator` and `numpy.random.SeedSequence` objects, derived from a single batch-level seed.
     -   `state.py`: Defines the core data structures and identity registries for the simulation. This includes `Manuscript` and `Witness` data classes, as well as the `ManuscriptRegistry` and `WitnessRegistry` that manage the unique identities of these entities. A top-level `StateRegistry` class holds these registries, providing a consistent snapshot of what exists in the simulation.
 -   **`config/`**: Manages the configuration and parameters for the simulations.
