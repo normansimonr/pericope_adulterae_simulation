@@ -1,0 +1,47 @@
+# Project Overview: Pericope Adulterae Simulation (pasim)
+
+This document provides an overview of the `pasim` project, outlining its purpose, architectural structure, and general functioning.
+
+## Purpose
+
+The primary goal of this project is to simulate the textual transmission of the New Testament passage known as the Pericope Adulterae (John 7:53-8:11). It provides a framework for researchers to conduct computational simulations, specifically Monte Carlo simulations, of the copying process of this Greek passage over centuries. This allows for the study of how textual variations might have emerged and propagated through historical manuscript traditions.
+
+## Architecture and Structure
+
+The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
+
+-   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
+    -   `model.py`: Will define the simulation model, its states, and transitions.
+    -   `rng.py`: For random number generation management, ensuring reproducibility.
+    -   `state.py`: To define the state of the simulation at any given point.
+-   **`config/`**: Manages the configuration and parameters for the simulations.
+    -   `schema.py`: Will define the validation schema for simulation configuration files.
+-   **`execution/`**: Handles the orchestration and running of simulations.
+    -   `runner.py`: Will execute a single simulation run.
+    -   `batch.py`: For managing and running multiple simulations in batches.
+    -   `parallel.py`: For parallelizing simulation execution.
+-   **`analysis/`**: Provides tools for processing, analyzing, and visualizing simulation results.
+    -   `metrics.py`: For defining and calculating simulation metrics.
+    -   `plots.py`: For generating visualizations of results.
+    -   `statistics.py`: For statistical analysis of simulation outputs.
+-   **`io/`**: Manages input and output operations, including reading initial data and writing simulation results.
+    -   `formats.py`: For handling different data formats.
+    -   `output.py`: For writing simulation outputs.
+    -   `aggregation.py`: For aggregating results from multiple runs.
+-   **`utils/`**: Contains common utility functions used across the project.
+    -   `logging.py`: For logging mechanisms.
+    -   `timing.py`: For performance measurement.
+-   **`cli.py`**: The command-line interface entry point for interacting with the simulation framework.
+
+## General Functioning (Planned)
+
+The `pasim` framework will facilitate the following general workflow for researchers:
+
+1.  **Configuration**: Users will define simulation parameters (e.g., number of scribes, error rates, manuscript branching, simulation duration) using configuration files, likely validated by the `config/schema.py`.
+2.  **Initialization**: The simulation will initialize its state based on an initial text (the Pericope Adulterae) and the specified configuration.
+3.  **Execution**: The `execution/` module will manage the running of Monte Carlo simulations. This involves iteratively applying copying rules and stochastic variations (defined in `core/model.py` and utilizing `core/rng.py`) to the textual state over a simulated historical period.
+4.  **Data Collection**: Throughout the simulation, relevant data points (e.g., changes in text, manuscript lineages) will be collected and stored via the `io/` module.
+5.  **Analysis**: After simulation completion, the `analysis/` module will be used to process the collected data, calculate metrics, generate plots, and perform statistical analyses to derive insights into textual transmission.
+6.  **Reporting**: Results and analyses will be outputted in various formats for researchers to study.
+
+This setup enables researchers to explore various hypotheses about the textual history of the Pericope Adulterae by adjusting simulation parameters and observing the emergent textual traditions.
