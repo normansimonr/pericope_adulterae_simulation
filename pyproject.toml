@@ -5,7 +5,10 @@ description = "A scientific simulation framework."
 authors = [{ name = "Your Name", email = "your@email.com" }]
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
