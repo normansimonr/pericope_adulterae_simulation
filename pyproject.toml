@@ -1,0 +1,12 @@
+[project]
+name = "pasim"
+version = "0.1.0"
+description = "A scientific simulation framework."
+authors = [{ name = "Your Name", email = "your@email.com" }]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
