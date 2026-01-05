@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Tuple, Any, Dict
+from typing import Tuple, Any, Dict, Iterable, ItemsView
 
 class Material(Enum):
     """
@@ -92,3 +92,98 @@ class Witness:
     this specific witness. This can include information not captured
     by the core fields. Defaults to an empty dictionary.
     """
+
+class ManuscriptRegistry:
+    """
+    Maintains a collection of all manuscripts in the simulation.
+
+    This registry acts as an authoritative, in-memory store for Manuscript objects,
+    indexed by their unique `manuscript_id`. It ensures that each manuscript
+    is represented only once and provides a central point of access for querying
+    what manuscripts exist within the simulation state.
+    """
+
+    def __init__(self):
+        self._manuscripts: Dict[str, Manuscript] = {}
+
+    def add(self, manuscript: Manuscript) -> None:
+        """Adds a manuscript to the registry, enforcing ID uniqueness."""
+        if manuscript.manuscript_id in self._manuscripts:
+            raise KeyError(f"Duplicate manuscript_id: {manuscript.manuscript_id}")
+        self._manuscripts[manuscript.manuscript_id] = manuscript
+
+    def get(self, manuscript_id: str) -> Manuscript:
+        """Retrieves a manuscript by its ID."""
+        return self._manuscripts[manuscript_id]
+
+    def __contains__(self, manuscript_id: str) -> bool:
+        """Checks if a manuscript ID exists in the registry."""
+        return manuscript_id in self._manuscripts
+
+    def __len__(self) -> int:
+        """Returns the total number of manuscripts in the registry."""
+        return len(self._manuscripts)
+
+    def items(self) -> Iterable[tuple[str, Manuscript]]:
+        """Returns a view of the manuscript items (id, object)."""
+        return self._manuscripts.items()
+
+
+class WitnessRegistry:
+    """
+    Maintains a collection of all witnesses in the simulation.
+
+    This registry stores Witness objects, indexed by `witness_id`, and ensures
+    that every witness is valid by checking that its associated `manuscript_id`
+    refers to a manuscript that exists in the ManuscriptRegistry.
+    """
+
+    def __init__(self, manuscript_registry: ManuscriptRegistry):
+        self._witnesses: Dict[str, Witness] = {}
+        self._manuscript_registry = manuscript_registry
+
+    def add(self, witness: Witness) -> None:
+        """
+        Adds a witness, ensuring its ID is unique and its manuscript exists.
+        """
+        if witness.witness_id in self._witnesses:
+            raise KeyError(f"Duplicate witness_id: {witness.witness_id}")
+        if witness.manuscript_id not in self._manuscript_registry:
+            raise ValueError(
+                f"Witness {witness.witness_id} references non-existent "
+                f"manuscript_id: {witness.manuscript_id}"
+            )
+        self._witnesses[witness.witness_id] = witness
+
+    def get(self, witness_id: str) -> Witness:
+        """Retrieves a witness by its ID."""
+        return self._witnesses[witness_id]
+
+    def __contains__(self, witness_id: str) -> bool:
+        """Checks if a witness ID exists in the registry."""
+        return witness_id in self._witnesses
+
+    def __len__(self) -> int:
+        """Returns the total number of witnesses."""
+        return len(self._witnesses)
+
+    def items(self) -> Iterable[tuple[str, Witness]]:
+        """Returns a view of the witness items (id, object)."""
+        return self._witnesses.items()
+
+
+@dataclass
+class StateRegistry:
+    """
+    A container for the simulation's core identity registries.
+
+    This class holds the authoritative registries for all manuscripts and
+    witnesses, providing a single, consistent snapshot of what entities
+    exist in the simulation. It has no simulation logic itself but serves
+    as the foundational context for the simulation model.
+    """
+    manuscripts: ManuscriptRegistry = field(default_factory=ManuscriptRegistry)
+    witnesses: WitnessRegistry = field(init=False)
+
+    def __post_init__(self):
+        self.witnesses = WitnessRegistry(self.manuscripts)

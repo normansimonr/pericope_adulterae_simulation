@@ -13,7 +13,7 @@ The project `pasim` is designed as a modular framework, providing a structured a
 -   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
     -   `model.py`: Will define the simulation model, its states, and transitions.
     -   `rng.py`: For random number generation management, ensuring reproducibility.
-    -   `state.py`: Defines the core data structures that represent the simulation's state. This includes `Manuscript` (a physical manuscript with temporal, material, and spatial attributes) and `Witness` (a textual witness belonging to a manuscript).
+    -   `state.py`: Defines the core data structures and identity registries for the simulation. This includes `Manuscript` and `Witness` data classes, as well as the `ManuscriptRegistry` and `WitnessRegistry` that manage the unique identities of these entities. A top-level `StateRegistry` class holds these registries, providing a consistent snapshot of what exists in the simulation.
 -   **`config/`**: Manages the configuration and parameters for the simulations.
     -   `schema.py`: Will define the validation schema for simulation configuration files.
 -   **`execution/`**: Handles the orchestration and running of simulations.
