@@ -31,7 +31,7 @@ import networkx as nx
 from numpy.random import Generator as RNG
 
 from pasim.core.genealogy import create_empty_genealogy, add_root_node
-from pasim.core.state import StateRegistry, Manuscript, Witness, Area, Material
+from pasim.core.state import StateRegistry, Manuscript, Witness, Region, Material
 
 
 @dataclass
@@ -99,7 +99,7 @@ def handle_deaths(state: GenerationState) -> GenerationState:
 
 def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
-    demand: Dict[int, Dict[Area, int]],
+    demand: Dict[int, Dict[Region, int]],
     death_ticks: Deque[int],
     rng: RNG,
 ) -> GenerationState:
@@ -135,10 +135,10 @@ def _spawn_new_manuscripts_from_demand(
         return state
 
     # Count alive manuscripts per region
-    stock = {region: 0 for region in Area}
+    stock = {region: 0 for region in Region}
     for ms_id in state.alive_manuscripts:
         manuscript = state.registries.manuscripts.get(ms_id)
-        stock[manuscript.area] += 1
+        stock[manuscript.region] += 1
     
     # Evaluate demand and spawn
     for region, demanded_count in demand_today.items():
@@ -156,7 +156,7 @@ def _spawn_new_manuscripts_from_demand(
                     birth_tick=current_tick,
                     death_tick=death_ticks.popleft(),
                     material=rng.choice(list(Material)),
-                    area=region,
+                    region=region,
                     location=(rng.uniform(0, 1), rng.uniform(0, 1)),
                 )
                 state.registries.manuscripts.add(manuscript)
@@ -185,7 +185,7 @@ def _spawn_new_manuscripts_from_demand(
 
 def advance_tick(
     state: GenerationState,
-    demand: Dict[int, Dict[Area, int]],
+    demand: Dict[int, Dict[Region, int]],
     death_ticks: Deque[int],
     rng: RNG
 ) -> GenerationState:

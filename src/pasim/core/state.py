@@ -7,14 +7,14 @@ class Material(Enum):
     Represents the material on which a manuscript is written.
     """
     PARCHMENT = "parchment"
-    PAPURUS = "papyrus"
+    PAPYRUS = "papyrus"
     PAPER = "paper"
 
-class Area(Enum):
+class Region(Enum):
     """
-    Represents the geographical area where a manuscript is located or originated.
+    Represents the geographical region where a manuscript is located or originated.
     """
-    ASIA_MINOR = "AsiaMinor"
+    ASIA_MINOR = "Asia Minor"
     EGYPT = "Egypt"
     LEVANT = "Levant"
 
@@ -51,9 +51,9 @@ class Manuscript:
     This attribute cannot change over the lifespan of the manuscript.
     """
 
-    area: Area = field()
+    region: Region = field()
     """
-    The geographical area where the manuscript is currently located or originated.
+    The geographical region where the manuscript is currently located or originated.
     This attribute can change over time as manuscripts are moved or copied in
     different regions.
     """
@@ -88,6 +88,7 @@ class Witness:
 
     metadata: Dict[str, Any] = field(default_factory=dict)
     """
+
     An optional dictionary for storing arbitrary metadata associated with
     this specific witness. This can include information not captured
     by the core fields. Defaults to an empty dictionary.
