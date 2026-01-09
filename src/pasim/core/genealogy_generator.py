@@ -1,54 +1,70 @@
-"""Genealogy Generator with Death Handling.
+"""
+Genealogy Generator with Death and Demand-Based Spawning.
 
-This module provides a tick-based orchestration structure for generating a
-manuscript genealogy. It defines the core control flow, state representation,
-and interfaces for the generation process, including the handling of
-manuscript "deaths".
+This module provides a tick-based orchestration for generating a manuscript
+genealogy. It defines the core control flow, state representation, and interfaces
+for the generation process, including:
+- Manuscript "death" handling.
+- Demand-based manuscript spawning.
 
-This implementation includes:
-- A simulation loop and state management.
-- Deterministic death handling: manuscripts are removed from the "alive" set
-  at their scheduled death tick.
+The generator's design enforces a strict separation of concerns:
+- **Genealogy Graph**: Nodes are abstract "witness instances." The graph topology
+  (who copied from whom) is its sole concern.
+- **Manuscript Registry**: Holds the rich metadata for physical manuscripts,
+  such as region, material, and birth/death ticks.
 
-Explicit Exclusions in this implementation:
-- Manuscript spawning and migration logic.
+This separation ensures that attributes of the physical artifacts do not pollute
+the abstract genealogical structure.
+
+Explicit Exclusions:
 - Exemplar selection policies.
-- Reputation assignment.
+- Migration, contamination, and scribal error models.
 - Textual state (tagged strings).
 - Batch execution or file I/O.
 """
-from typing import Dict, Any, MutableSet
+import itertools
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Dict, Any, MutableSet, Deque
 
 import networkx as nx
 from numpy.random import Generator as RNG
 
-from pasim.core.genealogy import create_empty_genealogy
-
-# A lightweight dictionary-based representation for the genealogy state.
-# - tick: The current simulation time-step.
-# - graph: The directed acyclic graph (DAG) of manuscript relationships.
-# - alive_manuscripts: A set of identifiers for manuscripts currently active.
-GenealogyState = Dict[str, Any]
+from pasim.core.genealogy import create_empty_genealogy, add_root_node
+from pasim.core.state import StateRegistry, Manuscript, Witness, Area, Material
 
 
-def initialise_genealogy_state() -> GenealogyState:
+@dataclass
+class GenerationState:
+    """Encapsulates the complete state for a genealogy generation run."""
+    tick: int
+    graph: nx.DiGraph
+    registries: StateRegistry
+    alive_manuscripts: MutableSet[str]
+    # Counters for generating unique IDs
+    manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+    witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+    witness_instance_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+
+
+def initialise_generation_state() -> GenerationState:
     """Creates and returns an empty genealogy generation state.
 
     This function initialises the state for a new simulation run, setting the
-    tick to zero and preparing empty data structures for the genealogy graph
-    and the set of alive manuscripts.
+    tick to zero and preparing empty data structures.
 
     Returns:
-        GenealogyState: A dictionary representing the pristine initial state.
+        GenerationState: An object representing the pristine initial state.
     """
-    return {
-        "tick": 0,
-        "graph": create_empty_genealogy(),
-        "alive_manuscripts": set(),
-    }
+    return GenerationState(
+        tick=0,
+        graph=create_empty_genealogy(),
+        registries=StateRegistry(),
+        alive_manuscripts=set(),
+    )
 
 
-def handle_deaths(state: GenealogyState) -> GenealogyState:
+def handle_deaths(state: GenerationState) -> GenerationState:
     """Processes manuscript deaths for the current tick.
 
     This function identifies manuscripts whose scheduled `death_tick` has
@@ -56,58 +72,145 @@ def handle_deaths(state: GenealogyState) -> GenealogyState:
     is purely administrative; it affects which manuscripts are available for
     future copying events but does not alter the historical record.
 
-    The genealogy graph itself is not modified. Nodes are never deleted,
-    ensuring that the full, immutable history of the genealogy is preserved
-    for post-hoc analysis. This deterministically separates the concept of
-    "alive" (available for copying) from "exists" (part of the historical
-    record).
+    The genealogy graph and manuscript registry are not modified. This
+    deterministically separates the concept of "alive" (available for copying)
+    from "exists" (part of the historical record).
 
     Args:
-        state (GenealogyState): The current state of the genealogy generation.
+        state (GenerationState): The current state of the genealogy generation.
 
     Returns:
-        GenealogyState: The updated state with newly deceased manuscripts
-                        removed from the `alive_manuscripts` set.
+        GenerationState: The updated state.
     """
-    current_tick = state["tick"]
-    graph = state["graph"]
+    current_tick = state.tick
+    manuscript_registry = state.registries.manuscripts
+    
     dead_manuscripts = {
         ms_id
-        for ms_id in state["alive_manuscripts"]
-        if graph.nodes[ms_id].get("death_tick") == current_tick
+        for ms_id in state.alive_manuscripts
+        if manuscript_registry.get(ms_id).death_tick == current_tick
     }
 
     if dead_manuscripts:
-        state["alive_manuscripts"] -= dead_manuscripts
+        state.alive_manuscripts -= dead_manuscripts
 
     return state
 
 
-def advance_tick(state: GenealogyState, rng: RNG) -> GenealogyState:
-    """Advances the simulation clock and orchestrates per-tick events.
+def _spawn_new_manuscripts_from_demand(
+    state: GenerationState,
+    demand: Dict[int, Dict[Area, int]],
+    death_ticks: Deque[int],
+    rng: RNG,
+) -> GenerationState:
+    """Spawns new manuscripts to meet exogenous demand.
 
-    This function serves as the main entry point for all events that occur
-    within a single time-step. It first increments the tick, then calls
-    sub-functions to handle discrete simulation events like deaths.
+    This function evaluates regional demand for manuscripts at the current tick
+    and creates new manuscripts if the number of currently alive manuscripts
+    in a region ("stock") is less than the demand.
+
+    For each spawned manuscript, it also creates the associated witness and
+    adds a new root node to the genealogy graph, representing the witness
+    instance.
+
+    The relationship between these entities is:
+    `Manuscript -> Witness -> WitnessInstance (Graph Node)`
+    - A Manuscript is the physical object with metadata (region, material).
+    - A Witness is the textual content tied to a Manuscript.
+    - A WitnessInstance is an abstract node in the genealogy graph,
+      representing the manuscript's existence at a point in time.
 
     Args:
-        state (GenealogyState): The current state of the genealogy generation.
-        rng (RNG): The random number generator for this simulation.
+        state: The current simulation state.
+        demand: A dictionary mapping tick -> region -> demanded count.
+        death_ticks: A queue of pre-calculated death ticks for new manuscripts.
+        rng: The random number generator.
 
     Returns:
-        GenealogyState: The updated state after processing the tick.
+        The updated simulation state.
     """
-    state["tick"] += 1
+    current_tick = state.tick
+    demand_today = demand.get(current_tick, {})
+    if not demand_today:
+        return state
+
+    # Count alive manuscripts per region
+    stock = {region: 0 for region in Area}
+    for ms_id in state.alive_manuscripts:
+        manuscript = state.registries.manuscripts.get(ms_id)
+        stock[manuscript.area] += 1
+    
+    # Evaluate demand and spawn
+    for region, demanded_count in demand_today.items():
+        stock_count = stock.get(region, 0)
+        if demanded_count > stock_count:
+            # Spawn new manuscripts
+            for _ in range(demanded_count - stock_count):
+                if not death_ticks:
+                    raise ValueError("Ran out of pre-generated death ticks.")
+                
+                # 1. Create Manuscript
+                manuscript_id = f"M{next(state.manuscript_id_counter)}"
+                manuscript = Manuscript(
+                    manuscript_id=manuscript_id,
+                    birth_tick=current_tick,
+                    death_tick=death_ticks.popleft(),
+                    material=rng.choice(list(Material)),
+                    area=region,
+                    location=(rng.uniform(0, 1), rng.uniform(0, 1)),
+                )
+                state.registries.manuscripts.add(manuscript)
+                state.alive_manuscripts.add(manuscript_id)
+
+                # 2. Create Witness
+                witness_id = f"W{next(state.witness_id_counter)}"
+                witness = Witness(
+                    witness_id=witness_id, manuscript_id=manuscript_id
+                )
+                state.registries.witnesses.add(witness)
+
+                # 3. Create WitnessInstance (Graph Node)
+                instance_id = f"I{next(state.witness_instance_id_counter)}"
+                add_root_node(
+                    graph=state.graph,
+                    node_id=instance_id,
+                    witness_id=witness_id,
+                    manuscript_id=manuscript_id,
+                    birth_tick=current_tick,
+                    death_tick=None, # Per design, node does not store death tick
+                )
+
+    return state
+
+
+def advance_tick(
+    state: GenerationState,
+    demand: Dict[int, Dict[Area, int]],
+    death_ticks: Deque[int],
+    rng: RNG
+) -> GenerationState:
+    """Advances the simulation clock and orchestrates per-tick events.
+
+    Args:
+        state: The current state of the genealogy generation.
+        demand: A dictionary defining regional demand per tick.
+        death_ticks: A queue of pre-calculated death ticks.
+        rng: The random number generator for this simulation.
+
+    Returns:
+        The updated state after processing the tick.
+    """
+    state.tick += 1
 
     # 1. Process deaths
     state = handle_deaths(state)
 
+    # 2. Spawn new manuscripts based on demand
+    state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, rng)
+    
     # --- Placeholder for future logic ---
-    # 2. Process migration (manuscripts moving between locations).
-    # 3. Evaluate demand for new copies at each location.
-    # 4. Spawn new manuscripts based on demand and exemplar availability.
-    #    - This will involve exemplar selection, reputation assignment, and
-    #      the creation of new witness nodes in the graph.
+    # 3. Process migration.
+    # 4. Select exemplars and create copies (child nodes).
 
     return state
 
@@ -125,18 +228,24 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
 
     Args:
         parameters (Dict[str, Any]): A dictionary of simulation parameters.
-                                     Must include 'total_ticks'.
+            Must include:
+            - 'total_ticks': Total number of ticks to simulate.
+            - 'demand': Dictionary mapping tick -> region -> count.
+            - 'death_ticks': An iterable of pre-calculated death ticks.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
     Returns:
         nx.DiGraph: The final generated genealogy graph, where nodes represent
-                    manuscript instances and edges represent copying events.
+                    witness instances and edges represent copying events.
     """
-    state = initialise_genealogy_state()
+    state = initialise_generation_state()
     total_ticks = parameters.get("total_ticks", 0)
+    demand = parameters.get("demand", {})
+    # Use a deque for efficient popleft()
+    death_ticks = deque(parameters.get("death_ticks", []))
 
     for _ in range(total_ticks):
-        state = advance_tick(state, rng)
+        state = advance_tick(state, demand, death_ticks, rng)
 
-    return state["graph"]
+    return state.graph
