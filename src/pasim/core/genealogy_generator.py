@@ -32,6 +32,7 @@ from numpy.random import Generator as RNG
 
 from pasim.core.genealogy import create_empty_genealogy, add_root_node
 from pasim.core.state import StateRegistry, Manuscript, Witness, Region, Material
+from pasim.core.spatial import generate_random_coordinates
 
 
 @dataclass
@@ -151,13 +152,19 @@ def _spawn_new_manuscripts_from_demand(
                 
                 # 1. Create Manuscript
                 manuscript_id = f"M{next(state.manuscript_id_counter)}"
+
+                # The manuscript's location is scoped to its region.
+                # The genealogy graph nodes (witness instances) have no
+                # spatial attributes, enforcing separation of concerns.
+                location = generate_random_coordinates(region, rng)
+
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
                     birth_tick=current_tick,
                     death_tick=death_ticks.popleft(),
                     material=rng.choice(list(Material)),
                     region=region,
-                    location=(rng.uniform(0, 1), rng.uniform(0, 1)),
+                    location=location,
                 )
                 state.registries.manuscripts.add(manuscript)
                 state.alive_manuscripts.add(manuscript_id)
