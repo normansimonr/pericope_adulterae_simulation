@@ -30,9 +30,10 @@ from typing import Dict, Any, MutableSet, Deque
 import networkx as nx
 from numpy.random import Generator as RNG
 
-from pasim.core.genealogy import create_empty_genealogy, add_root_node
+from pasim.core.genealogy import create_empty_genealogy, add_root_node, add_child_node
 from pasim.core.state import StateRegistry, Manuscript, Witness, Region, Material
 from pasim.core.spatial import generate_random_coordinates
+from pasim.core.exemplar_selection import select_exemplars
 
 
 @dataclass
@@ -42,6 +43,7 @@ class GenerationState:
     graph: nx.DiGraph
     registries: StateRegistry
     alive_manuscripts: MutableSet[str]
+    manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
     # Counters for generating unique IDs
     manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
     witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
@@ -137,10 +139,13 @@ def _spawn_new_manuscripts_from_demand(
 
     # Count alive manuscripts per region
     stock = {region: 0 for region in Region}
+    # Also collect them for the exemplar selection step
+    alive_by_region = {region: [] for region in Region}
     for ms_id in state.alive_manuscripts:
         manuscript = state.registries.manuscripts.get(ms_id)
         stock[manuscript.region] += 1
-    
+        alive_by_region[manuscript.region].append(manuscript)
+
     # Evaluate demand and spawn
     for region, demanded_count in demand_today.items():
         stock_count = stock.get(region, 0)
@@ -152,11 +157,8 @@ def _spawn_new_manuscripts_from_demand(
                 
                 # 1. Create Manuscript
                 manuscript_id = f"M{next(state.manuscript_id_counter)}"
-
-                # The manuscript's location is scoped to its region.
-                # The genealogy graph nodes (witness instances) have no
-                # spatial attributes, enforcing separation of concerns.
                 location = generate_random_coordinates(region, rng)
+                reputation = rng.choice([1, 2, 3, 4, 5])
 
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
@@ -167,25 +169,49 @@ def _spawn_new_manuscripts_from_demand(
                     location=location,
                 )
                 state.registries.manuscripts.add(manuscript)
-                state.alive_manuscripts.add(manuscript_id)
 
-                # 2. Create Witness
+                # 2. Select Exemplars
+                exemplars = select_exemplars(
+                    new_manuscript=manuscript,
+                    alive_manuscripts_in_region=alive_by_region[region],
+                    graph=state.graph,
+                    manuscript_to_instance_map=state.manuscript_to_instance_map,
+                    rng=rng,
+                )
+
+                # 3. Create Witness and WitnessInstance (Graph Node)
                 witness_id = f"W{next(state.witness_id_counter)}"
+                instance_id = f"I{next(state.witness_instance_id_counter)}"
                 witness = Witness(
                     witness_id=witness_id, manuscript_id=manuscript_id
                 )
                 state.registries.witnesses.add(witness)
 
-                # 3. Create WitnessInstance (Graph Node)
-                instance_id = f"I{next(state.witness_instance_id_counter)}"
-                add_root_node(
-                    graph=state.graph,
-                    node_id=instance_id,
-                    witness_id=witness_id,
-                    manuscript_id=manuscript_id,
-                    birth_tick=current_tick,
-                    death_tick=None, # Per design, node does not store death tick
-                )
+                if not exemplars:
+                    add_root_node(
+                        graph=state.graph,
+                        node_id=instance_id,
+                        witness_id=witness_id,
+                        manuscript_id=manuscript_id,
+                        birth_tick=current_tick,
+                        reputation=reputation,
+                        death_tick=None, # Per design, node does not store death tick
+                    )
+                else:
+                    add_child_node(
+                        graph=state.graph,
+                        node_id=instance_id,
+                        parent_node_ids=exemplars,
+                        witness_id=witness_id,
+                        manuscript_id=manuscript_id,
+                        birth_tick=current_tick,
+                        reputation=reputation,
+                        death_tick=None, # Per design, node does not store death tick
+                    )
+                
+                # 4. Update state
+                state.alive_manuscripts.add(manuscript_id)
+                state.manuscript_to_instance_map[manuscript_id] = instance_id
 
     return state
 

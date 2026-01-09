@@ -47,6 +47,7 @@ def add_root_node(
     witness_id: int,
     manuscript_id: int,
     birth_tick: int,
+    reputation: int,
     death_tick: Optional[int] = None,
 ) -> None:
     """
@@ -66,6 +67,7 @@ def add_root_node(
         witness_id: The foreign key to the Witness registry.
         manuscript_id: The foreign key to the Manuscript registry.
         birth_tick: The simulation tick at which this witness was created.
+        reputation: The reputation score of this witness instance.
         death_tick: The simulation tick at which this witness ceased to be
                     available for copying (optional).
 
@@ -80,6 +82,7 @@ def add_root_node(
         witness_id=witness_id,
         manuscript_id=manuscript_id,
         birth_tick=birth_tick,
+        reputation=reputation,
         death_tick=death_tick,
     )
 
@@ -91,6 +94,7 @@ def add_child_node(
     witness_id: int,
     manuscript_id: int,
     birth_tick: int,
+    reputation: int,
     death_tick: Optional[int] = None,
 ) -> None:
     """
@@ -111,6 +115,7 @@ def add_child_node(
         witness_id: The foreign key to the Witness registry.
         manuscript_id: The foreign key to the Manuscript registry.
         birth_tick: The simulation tick at which this witness was created.
+        reputation: The reputation score of this witness instance.
         death_tick: The simulation tick at which this witness ceased to be
                     available for copying (optional).
 
@@ -152,6 +157,7 @@ def add_child_node(
                 "witness_id": witness_id,
                 "manuscript_id": manuscript_id,
                 "birth_tick": birth_tick,
+                "reputation": reputation,
                 "death_tick": death_tick,
             }
         },
@@ -179,7 +185,7 @@ def validate_genealogy(graph: GenealogyGraph) -> None:
     if not nx.is_directed_acyclic_graph(graph):
         raise nx.NetworkXError("The genealogy graph must be a Directed Acyclic Graph (DAG).")
 
-    required_attrs = {"witness_id", "manuscript_id", "birth_tick"}
+    required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
     for node_id, attrs in graph.nodes(data=True):
         missing_attrs = required_attrs - set(attrs.keys())
         if missing_attrs:

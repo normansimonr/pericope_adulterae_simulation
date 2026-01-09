@@ -16,6 +16,8 @@ To accurately model textual transmission, the simulation distinguishes between s
 
 -   **Witness Instance / Genealogy Node**: This is an abstract representation in the genealogy graph. Each Witness has exactly one Witness Instance, which corresponds to a node in the `networkx` graph. This node stores only structural information (like its ID and links to its Witness and Manuscript via foreign keys) and its `birth_tick`. Crucially, **it does NOT store regional, geographic, material, or `death_tick` data**, as these belong to the `Manuscript` object. The graph thus focuses purely on the lineage and copying relationships between textual instances.
 
+    To ensure efficient lookup between a `Manuscript` (with its rich metadata) and its corresponding `Witness Instance` (graph node), a direct mapping (`manuscript_to_instance_map`) is maintained within the simulation's `GenerationState`. This map is populated at the exact moment a `Manuscript` and its `Witness Instance` are created together in an atomic operation (specifically within `_spawn_new_manuscripts_from_demand`). This guarantees the correctness of the mapping and allows for O(1) retrieval of a `Witness Instance`'s ID given a `Manuscript`'s ID, without needing to iterate through intermediate registries or graph nodes.
+
 The relationship can be visualized as:
 `Manuscript` (physical attributes)
   `|`
@@ -30,6 +32,7 @@ This separation ensures that the abstract genealogical structure remains clean a
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
 
 -   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
+    -   `exemplar_selection.py`: Implements the two-stage exemplar selection logic, which combines geographical proximity with textual authority (reputation) to choose parents for new manuscripts.
     -   `scribal_rules.py`: Implements the composite scribal rule, which is the high-level pipeline for generating a new textual witness. It composes the base transmission, reputation-to-error-intensity, and mutation modules to simulate the full act of copying.
     -   `genealogy.py`: Defines the structural genealogy of witness instances using a `networkx` directed acyclic graph (DAG). It tracks ancestry, timing, and topology (who copied from whom and when).
     -   `genealogy_generator.py`: Orchestrates the deterministic, tick-based generation of the genealogy graph. It uses a state-machine-like process, advancing tick by tick and hosting the injection of scientific rules. It now manages the lifecycle of manuscripts, including their deterministic death at a scheduled tick and **demand-based spawning of new manuscripts** to meet exogenous regional requirements.
