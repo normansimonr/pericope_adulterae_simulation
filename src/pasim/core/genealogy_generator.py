@@ -1,10 +1,11 @@
 """
-Genealogy Generator with Death and Demand-Based Spawning.
+Genealogy Generator with Death, Migration, and Demand-Based Spawning.
 
 This module provides a tick-based orchestration for generating a manuscript
 genealogy. It defines the core control flow, state representation, and interfaces
 for the generation process, including:
 - Manuscript "death" handling.
+- Manuscript migration between and within regions.
 - Demand-based manuscript spawning.
 
 The generator's design enforces a strict separation of concerns:
@@ -18,14 +19,14 @@ the abstract genealogical structure.
 
 Explicit Exclusions:
 - Exemplar selection policies.
-- Migration, contamination, and scribal error models.
+- Contamination and scribal error models.
 - Textual state (tagged strings).
 - Batch execution or file I/O.
 """
 import itertools
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, Any, MutableSet, Deque
+from typing import Dict, Any, MutableSet, Deque, Optional
 
 import networkx as nx
 from numpy.random import Generator as RNG
@@ -96,6 +97,50 @@ def handle_deaths(state: GenerationState) -> GenerationState:
 
     if dead_manuscripts:
         state.alive_manuscripts -= dead_manuscripts
+
+    return state
+
+
+def handle_migration(
+    state: GenerationState,
+    rng: RNG,
+    p_region_migration: float,
+    p_internal_relocation: Optional[float] = None,
+) -> GenerationState:
+    """Handles the migration of manuscripts between and within regions.
+
+    Migration is a manuscript-level event. It affects the manuscript's `region`
+    and `location` attributes. This change can influence future exemplar
+    selection for new manuscripts spawned in the affected regions, but it does
+    not alter the historical genealogy graph.
+
+    Args:
+        state: The current simulation state.
+        rng: The seeded random number generator.
+        p_region_migration: Probability of a manuscript migrating to a
+                            different region.
+        p_internal_relocation: Probability of a manuscript relocating within
+                               its current region.
+
+    Returns:
+        The updated simulation state.
+    """
+    # Iterate over a copy as the underlying registry objects will be modified
+    for ms_id in list(state.alive_manuscripts):
+        manuscript = state.registries.manuscripts.get(ms_id)
+
+        # 1. Check for region migration
+        if rng.random() < p_region_migration:
+            other_regions = [r for r in Region if r != manuscript.region]
+            if other_regions:
+                new_region = rng.choice(other_regions)
+                manuscript.region = new_region
+                manuscript.location = generate_random_coordinates(new_region, rng)
+            continue  # A manuscript can only have one migration event per tick
+
+        # 2. Check for internal relocation
+        if p_internal_relocation and rng.random() < p_internal_relocation:
+            manuscript.location = generate_random_coordinates(manuscript.region, rng)
 
     return state
 
@@ -220,6 +265,7 @@ def advance_tick(
     state: GenerationState,
     demand: Dict[int, Dict[Region, int]],
     death_ticks: Deque[int],
+    params: Dict[str, Any],
     rng: RNG
 ) -> GenerationState:
     """Advances the simulation clock and orchestrates per-tick events.
@@ -228,6 +274,7 @@ def advance_tick(
         state: The current state of the genealogy generation.
         demand: A dictionary defining regional demand per tick.
         death_ticks: A queue of pre-calculated death ticks.
+        params: Dictionary of simulation parameters, including migration probabilities.
         rng: The random number generator for this simulation.
 
     Returns:
@@ -238,12 +285,16 @@ def advance_tick(
     # 1. Process deaths
     state = handle_deaths(state)
 
-    # 2. Spawn new manuscripts based on demand
+    # 2. Process migration
+    state = handle_migration(
+        state=state,
+        rng=rng,
+        p_region_migration=params.get("p_region_migration", 0.0),
+        p_internal_relocation=params.get("p_internal_relocation"),
+    )
+
+    # 3. Spawn new manuscripts based on demand
     state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, rng)
-    
-    # --- Placeholder for future logic ---
-    # 3. Process migration.
-    # 4. Select exemplars and create copies (child nodes).
 
     return state
 
@@ -265,6 +316,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             - 'total_ticks': Total number of ticks to simulate.
             - 'demand': Dictionary mapping tick -> region -> count.
             - 'death_ticks': An iterable of pre-calculated death ticks.
+            - May include 'p_region_migration' and 'p_internal_relocation'.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
@@ -279,6 +331,6 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
     death_ticks = deque(parameters.get("death_ticks", []))
 
     for _ in range(total_ticks):
-        state = advance_tick(state, demand, death_ticks, rng)
+        state = advance_tick(state, demand, death_ticks, parameters, rng)
 
     return state.graph
