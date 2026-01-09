@@ -1,17 +1,17 @@
-"""Genealogy Generator Skeleton.
+"""Genealogy Generator with Death Handling.
 
 This module provides a tick-based orchestration structure for generating a
 manuscript genealogy. It defines the core control flow, state representation,
-and interfaces for the generation process.
+and interfaces for the generation process, including the handling of
+manuscript "deaths".
 
-This initial implementation is a skeleton. It correctly sets up the simulation
-loop and state management but does not contain any concrete logic for the
-actual generative processes (e.g., manuscript spawning, death, migration).
-These scientific rules will be injected into the `advance_tick` function in
-subsequent development steps.
+This implementation includes:
+- A simulation loop and state management.
+- Deterministic death handling: manuscripts are removed from the "alive" set
+  at their scheduled death tick.
 
-Explicit Exclusions in this Skeleton:
-- Manuscript spawning, death, and migration logic.
+Explicit Exclusions in this implementation:
+- Manuscript spawning and migration logic.
 - Exemplar selection policies.
 - Reputation assignment.
 - Textual state (tagged strings).
@@ -48,13 +48,47 @@ def initialise_genealogy_state() -> GenealogyState:
     }
 
 
-def advance_tick(state: GenealogyState, rng: RNG) -> GenealogyState:
-    """Advances the simulation clock by one tick and orchestrates events.
+def handle_deaths(state: GenealogyState) -> GenealogyState:
+    """Processes manuscript deaths for the current tick.
 
-    This function serves as the main entry point for all events that occur within
-    a single time-step of the simulation. In this skeleton implementation, it
-    only increments the tick counter. Future implementations will host the
-    rules for deaths, migration, demand evaluation, and spawning.
+    This function identifies manuscripts whose scheduled `death_tick` has
+    arrived and removes them from the set of `alive_manuscripts`. This action
+    is purely administrative; it affects which manuscripts are available for
+    future copying events but does not alter the historical record.
+
+    The genealogy graph itself is not modified. Nodes are never deleted,
+    ensuring that the full, immutable history of the genealogy is preserved
+    for post-hoc analysis. This deterministically separates the concept of
+    "alive" (available for copying) from "exists" (part of the historical
+    record).
+
+    Args:
+        state (GenealogyState): The current state of the genealogy generation.
+
+    Returns:
+        GenealogyState: The updated state with newly deceased manuscripts
+                        removed from the `alive_manuscripts` set.
+    """
+    current_tick = state["tick"]
+    graph = state["graph"]
+    dead_manuscripts = {
+        ms_id
+        for ms_id in state["alive_manuscripts"]
+        if graph.nodes[ms_id].get("death_tick") == current_tick
+    }
+
+    if dead_manuscripts:
+        state["alive_manuscripts"] -= dead_manuscripts
+
+    return state
+
+
+def advance_tick(state: GenealogyState, rng: RNG) -> GenealogyState:
+    """Advances the simulation clock and orchestrates per-tick events.
+
+    This function serves as the main entry point for all events that occur
+    within a single time-step. It first increments the tick, then calls
+    sub-functions to handle discrete simulation events like deaths.
 
     Args:
         state (GenealogyState): The current state of the genealogy generation.
@@ -65,8 +99,10 @@ def advance_tick(state: GenealogyState, rng: RNG) -> GenealogyState:
     """
     state["tick"] += 1
 
+    # 1. Process deaths
+    state = handle_deaths(state)
+
     # --- Placeholder for future logic ---
-    # 1. Process deaths (manuscripts that cease to be available).
     # 2. Process migration (manuscripts moving between locations).
     # 3. Evaluate demand for new copies at each location.
     # 4. Spawn new manuscripts based on demand and exemplar availability.
