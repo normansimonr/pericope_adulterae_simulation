@@ -35,6 +35,7 @@ from pasim.core.genealogy import create_empty_genealogy, add_root_node, add_chil
 from pasim.core.state import StateRegistry, Manuscript, Witness, Region, Material
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.exemplar_selection import select_exemplars
+from pasim.core.reputation import sample_reputation
 
 
 @dataclass
@@ -149,6 +150,7 @@ def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
     demand: Dict[int, Dict[Region, int]],
     death_ticks: Deque[int],
+    params: Dict[str, Any],
     rng: RNG,
 ) -> GenerationState:
     """Spawns new manuscripts to meet exogenous demand.
@@ -172,6 +174,7 @@ def _spawn_new_manuscripts_from_demand(
         state: The current simulation state.
         demand: A dictionary mapping tick -> region -> demanded count.
         death_ticks: A queue of pre-calculated death ticks for new manuscripts.
+        params: Dictionary of simulation parameters.
         rng: The random number generator.
 
     Returns:
@@ -203,7 +206,9 @@ def _spawn_new_manuscripts_from_demand(
                 # 1. Create Manuscript
                 manuscript_id = f"M{next(state.manuscript_id_counter)}"
                 location = generate_random_coordinates(region, rng)
-                reputation = rng.choice([1, 2, 3, 4, 5])
+                reputation = sample_reputation(
+                    rng, params.get("reputation_distribution")
+                )
 
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
@@ -294,7 +299,7 @@ def advance_tick(
     )
 
     # 3. Spawn new manuscripts based on demand
-    state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, rng)
+    state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, params, rng)
 
     return state
 
@@ -316,7 +321,8 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             - 'total_ticks': Total number of ticks to simulate.
             - 'demand': Dictionary mapping tick -> region -> count.
             - 'death_ticks': An iterable of pre-calculated death ticks.
-            - May include 'p_region_migration' and 'p_internal_relocation'.
+            - May include 'p_region_migration', 'p_internal_relocation',
+              and 'reputation_distribution'.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 

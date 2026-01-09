@@ -14,6 +14,8 @@ deterministic intensity level that mutation operators can then consume.
 """
 
 from typing import Dict, Optional
+import math
+import numpy as np
 
 
 # Define the default mapping from reputation level to expected mutation proportion.
@@ -90,3 +92,47 @@ def expected_mutation_proportion(
         )
 
     return proportion
+
+
+def sample_reputation(
+    rng: np.random.Generator,
+    reputation_distribution: Optional[Dict[int, float]] = None
+) -> int:
+    """
+    Samples a reputation value based on a user-defined probability distribution.
+
+    This function allows for controlled, probabilistic assignment of reputation scores
+    to new witness instances, making reputation an experimental parameter.
+
+    Args:
+        rng: The seeded random number generator to ensure reproducibility.
+        reputation_distribution: An optional dictionary mapping reputation scores (1-5)
+                                 to their probabilities. If None, a default uniform
+                                 distribution is used.
+
+    Returns:
+        An integer representing the sampled reputation score (1-5).
+
+    Raises:
+        ValueError: If the provided distribution is invalid (wrong keys, negative
+                    probabilities, or probabilities that do not sum to 1).
+    """
+    if reputation_distribution is None:
+        # Default to the DEFAULT_REPUTATION_MAPPING if none is provided
+        reputation_distribution = DEFAULT_REPUTATION_MAPPING
+
+    # Validate the distribution
+    expected_keys = {1, 2, 3, 4, 5}
+    if set(reputation_distribution.keys()) != expected_keys:
+        raise ValueError(f"Reputation distribution must have keys {expected_keys}.")
+
+    probabilities = list(reputation_distribution.values())
+    if any(p < 0 for p in probabilities):
+        raise ValueError("Probabilities in reputation distribution cannot be negative.")
+
+    if not math.isclose(sum(probabilities), 1.0, rel_tol=1e-9):
+        raise ValueError("Probabilities in reputation distribution must sum to 1.")
+
+    # Sample a reputation score based on the weighted distribution
+    reputations = list(reputation_distribution.keys())
+    return rng.choice(reputations, p=probabilities)
