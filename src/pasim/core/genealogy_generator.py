@@ -294,7 +294,7 @@ def advance_tick(
     state = handle_deaths(state)
 
     # 2. Process historical events (exogenous shocks)
-    event_manager.apply_events_for_tick(state, rng, params)
+    event_manager.apply_events_for_tick(state, rng)
 
     # 3. Process migration (mechanistic)
     state = handle_migration(
@@ -327,8 +327,8 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             - 'total_ticks': Total number of ticks to simulate.
             - 'demand': Dictionary mapping tick -> region -> count.
             - 'death_ticks': An iterable of pre-calculated death ticks.
-            - May include 'p_region_migration', 'p_internal_relocation',
-              'reputation_distribution', and 'historical_events'.
+            May also contain keys for historical event configurations, such as:
+            - 'persecutions': A list of persecution event dictionaries.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
@@ -342,9 +342,17 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
     # Use a deque for efficient popleft()
     death_ticks = deque(parameters.get("death_ticks", []))
 
-    # Initialize the manager for historical events. For now, it's empty.
-    # Concrete events would be loaded from `parameters` in a full implementation.
-    event_manager = HistoricalEventManager(parameters.get("historical_events", []))
+    # Assemble historical event configurations from parameters
+    event_configs = []
+    # Add persecution events
+    for config in parameters.get("persecutions", []):
+        event_configs.append({**config, "event_type": "persecution"})
+    
+    # Future event types (e.g., material transitions) would be added here
+    # for config in parameters.get("material_transitions", []):
+    #     event_configs.append({**config, "event_type": "material_transition"})
+
+    event_manager = HistoricalEventManager(event_configs)
 
     for _ in range(total_ticks):
         state = advance_tick(state, demand, death_ticks, parameters, rng, event_manager)

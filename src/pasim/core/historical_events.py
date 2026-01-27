@@ -21,9 +21,10 @@ Each `HistoricalEvent` is a self-contained unit of logic that is triggered by
 the manager at the appropriate tick.
 """
 
-from typing import Optional, List, Set, Any
+from typing import Optional, List, Set, Any, Dict
 from dataclasses import dataclass, field
 import numpy as np
+import math
 
 from .state import GenerationState
 
@@ -49,7 +50,7 @@ class HistoricalEvent:
     end_tick: Optional[int] = None
     regions: Optional[Set[str]] = None
 
-    def apply(self, state: GenerationState, rng: np.random.Generator, params: Any) -> None:
+    def apply(self, state: GenerationState, rng: np.random.Generator) -> None:
         """
         Applies the historical event's effect to the simulation state.
 
@@ -58,7 +59,6 @@ class HistoricalEvent:
         Args:
             state: The current simulation state.
             rng: The simulation's random number generator.
-            params: The global simulation parameters.
 
         Raises:
             NotImplementedError: If not implemented by a subclass.
@@ -80,44 +80,111 @@ class HistoricalEvent:
         return tick == self.start_tick
 
 
+@dataclass
+class PersecutionEvent(HistoricalEvent):
+    """
+    A historical event that models persecution, destroying a fraction of manuscripts.
+
+    This event simulates a historical shock where a proportion of manuscripts
+    in specific regions are suddenly removed from the "alive" pool, making them
+    unavailable for future copying. This is distinct from a manuscript's
+    natural lifecycle (scheduled death) and represents an external, destructive force.
+
+    Attributes:
+        kill_proportion (float): The fraction of eligible manuscripts to be
+                                 destroyed, in the interval [0.0, 1.0].
+    """
+    kill_proportion: float
+
+    def __post_init__(self):
+        if not (0.0 <= self.kill_proportion <= 1.0):
+            raise ValueError(
+                "kill_proportion must be between 0.0 and 1.0, "
+                f"but got {self.kill_proportion}"
+            )
+
+    def apply(self, state: GenerationState, rng: np.random.Generator) -> None:
+        """
+        Applies the persecution effect.
+
+        Identifies all eligible manuscripts, calculates the number to destroy
+        based on `kill_proportion`, and randomly removes them from the set of
+        `alive_manuscripts`.
+
+        Args:
+            state: The current simulation state.
+            rng: The simulation's random number generator for deterministic selection.
+        """
+        if self.kill_proportion == 0.0:
+            return
+
+        # 1. Identify eligible manuscripts
+        manuscript_registry = state.registries.manuscripts
+        eligible_manuscripts = [
+            ms_id for ms_id in state.alive_manuscripts
+            if self.regions is None or manuscript_registry.get(ms_id).region in self.regions
+        ]
+
+        if not eligible_manuscripts:
+            return
+
+        # 2. Determine number to destroy
+        n_to_destroy = math.floor(self.kill_proportion * len(eligible_manuscripts))
+        if n_to_destroy == 0:
+            return
+
+        # 3. Randomly choose victims
+        victims = rng.choice(
+            eligible_manuscripts,
+            size=n_to_destroy,
+            replace=False
+        )
+
+        # 4. Kill them (remove from alive set)
+        state.alive_manuscripts.difference_update(victims)
+
+
+def create_event_from_config(config: Dict[str, Any]) -> HistoricalEvent:
+    """
+    Factory function to create a HistoricalEvent from a configuration dictionary.
+    """
+    event_type = config.pop("event_type")
+    
+    if event_type == "persecution":
+        # Ensure 'regions' is a set if it exists
+        if 'regions' in config and config['regions'] is not None:
+            config['regions'] = set(config['regions'])
+        return PersecutionEvent(**config)
+    
+    raise ValueError(f"Unknown historical event type: {event_type}")
+
+
 class HistoricalEventManager:
     """
     Manages and applies all historical events during a simulation run.
-
-    This class is responsible for dispatching events at the correct time and
-    in a deterministic order. It does not contain any event-specific logic
-    itself, but rather orchestrates the execution of `HistoricalEvent` objects.
     """
 
-    def __init__(self, events: Optional[List[HistoricalEvent]] = None):
+    def __init__(self, event_configs: Optional[List[Dict[str, Any]]] = None):
         """
-        Initializes the manager with a list of historical events.
+        Initializes the manager by building event objects from configuration dicts.
 
         Args:
-            events: A list of HistoricalEvent objects to manage.
+            event_configs: A list of configuration dictionaries, each defining
+                           a historical event.
         """
-        # Sort events deterministically to ensure stable application order.
-        # Sort first by start_tick, then by the event's class name.
+        events = [create_event_from_config(cfg) for cfg in event_configs or []]
+        
         self._events = sorted(
-            events or [],
+            events,
             key=lambda e: (e.start_tick, e.__class__.__name__)
         )
 
-    def apply_events_for_tick(self, state: GenerationState, rng: np.random.Generator, params: Any) -> None:
+    def apply_events_for_tick(self, state: GenerationState, rng: np.random.Generator) -> None:
         """
         Finds and applies all active historical events for the current tick.
-
-        This method reads the current tick from the state and iterates through
-        its list of events, applying any that are active.
-
-        Args:
-            state: The current simulation state, which includes the current tick.
-            rng: The simulation's random number generator.
-            params: The global simulation parameters.
         """
         current_tick = state.tick
         active_events = [event for event in self._events if event.is_active(current_tick)]
 
         for event in active_events:
-            # The apply method of the concrete event will handle region filtering.
-            event.apply(state, rng, params)
+            event.apply(state, rng)
