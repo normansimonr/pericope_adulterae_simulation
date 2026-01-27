@@ -31,11 +31,20 @@ This separation ensures that the abstract genealogical structure remains clean a
 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
 
+### Simulation Dynamics: Mechanistic vs. Historical Rules
+
+The simulation distinguishes between two fundamental types of dynamics:
+
+-   **Mechanistic Rules**: These are the continuous, local, and emergent processes that drive the simulation forward tick by tick. They include manuscript death, migration, and demand-based spawning (copying). These rules are fundamental to the simulation's engine and are applied consistently.
+
+-   **Historical Rules**: These represent discrete, time-bound, and often global "shocks" or transitions that are imposed on the simulation from the outside. Managed by the **Temporal-Historical Rule Engine** (`historical_events.py`), these events model exogenous phenomena like imperial persecutions, the transition from papyrus to parchment, or changes in dominant scripts. This plug-in architecture allows researchers to easily add, remove, or modify historical scenarios without altering the core simulation loop.
+
 -   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
     -   `exemplar_selection.py`: Implements the two-stage exemplar selection logic, which combines geographical proximity with textual authority (reputation) to choose parents for new manuscripts.
     -   `scribal_rules.py`: Implements the composite scribal rule, which is the high-level pipeline for generating a new textual witness. It composes the base transmission, reputation-to-error-intensity, and mutation modules to simulate the full act of copying.
     -   `genealogy.py`: Defines the structural genealogy of witness instances using a `networkx` directed acyclic graph (DAG). It tracks ancestry, timing, and topology (who copied from whom and when).
     -   `genealogy_generator.py`: Orchestrates the deterministic, tick-based generation of the genealogy graph. It uses a state-machine-like process, advancing tick by tick and hosting the injection of scientific rules. It now manages the lifecycle of manuscripts, including their deterministic death, migration, and demand-based spawning.
+    -   `historical_events.py`: Provides the framework for the **Temporal-Historical Rule Engine**, allowing for discrete, time-bound "shocks" (e.g., persecutions, material transitions) to be applied to the simulation state.
     -   `tagged_string_constraints.py`: Defines the legal "alphabet" for segment values in a tagged string. It provides a single, authoritative source of truth for the valid state space, ensuring all mutation and factory functions operate within explicitly enforced boundaries.
     -   `transmission.py`: Defines the base rules for how a new tagged string is generated from parent exemplars (e.g., majority voting). This represents the ideal, error-free copying process before any scribal mutations are applied.
     -   `reputation.py`: Defines the policy layer that maps a witness's reputation level to an expected proportion of segments that will mutate during copying. It is also responsible for sampling new reputation scores from a configurable probability distribution. This translates the abstract concept of reputation into a concrete error intensity.
@@ -68,7 +77,7 @@ The `pasim` framework will facilitate the following general workflow for researc
 
 1.  **Configuration**: Users will define simulation parameters (e.g., number of scribes, error rates, manuscript branching, **migration probabilities**, simulation duration, **regional demand for new manuscripts**) using configuration files, likely validated by the `config/schema.py`.
 2.  **Initialization**: The simulation will initialize its state based on an initial text (the Pericope Adulterae) and the specified configuration.
-3.  **Execution**: The `execution/` module will manage the running of Monte Carlo simulations. This involves iteratively applying copying rules, utilizing `core/rng.py`, handling manuscript **migration**, and **dynamically spawning new manuscripts based on regional demand** to the textual state over a simulated historical period.
+3.  **Execution**: The `execution/` module will manage the running of Monte Carlo simulations. This involves iteratively applying mechanistic rules (like death and migration), processing exogenous historical events, and dynamically spawning new manuscripts based on regional demand. All stochasticity is controlled via `core/rng.py` to ensure reproducibility.
 4.  **Data Collection**: Throughout the simulation, relevant data points (e.g., changes in text, manuscript lineages, manuscript population dynamics) will be collected and stored via the `io/` module.
 5.  **Analysis**: After simulation completion, the `analysis/` module will be used to process the collected data, calculate metrics, generate plots, and perform statistical analyses to derive insights into textual transmission.
 6.  **Reporting**: Results and analyses will be outputted in various formats for researchers to study.

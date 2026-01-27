@@ -36,6 +36,7 @@ from pasim.core.state import StateRegistry, Manuscript, Witness, Region, Materia
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.reputation import sample_reputation
+from pasim.core.historical_events import HistoricalEventManager
 
 
 @dataclass
@@ -271,7 +272,8 @@ def advance_tick(
     demand: Dict[int, Dict[Region, int]],
     death_ticks: Deque[int],
     params: Dict[str, Any],
-    rng: RNG
+    rng: RNG,
+    event_manager: HistoricalEventManager,
 ) -> GenerationState:
     """Advances the simulation clock and orchestrates per-tick events.
 
@@ -281,16 +283,20 @@ def advance_tick(
         death_ticks: A queue of pre-calculated death ticks.
         params: Dictionary of simulation parameters, including migration probabilities.
         rng: The random number generator for this simulation.
+        event_manager: The manager for historical events.
 
     Returns:
         The updated state after processing the tick.
     """
     state.tick += 1
 
-    # 1. Process deaths
+    # 1. Process deaths (mechanistic)
     state = handle_deaths(state)
 
-    # 2. Process migration
+    # 2. Process historical events (exogenous shocks)
+    event_manager.apply_events_for_tick(state, rng, params)
+
+    # 3. Process migration (mechanistic)
     state = handle_migration(
         state=state,
         rng=rng,
@@ -298,7 +304,7 @@ def advance_tick(
         p_internal_relocation=params.get("p_internal_relocation"),
     )
 
-    # 3. Spawn new manuscripts based on demand
+    # 4. Spawn new manuscripts based on demand (mechanistic)
     state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, params, rng)
 
     return state
@@ -322,7 +328,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             - 'demand': Dictionary mapping tick -> region -> count.
             - 'death_ticks': An iterable of pre-calculated death ticks.
             - May include 'p_region_migration', 'p_internal_relocation',
-              and 'reputation_distribution'.
+              'reputation_distribution', and 'historical_events'.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
@@ -336,7 +342,11 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
     # Use a deque for efficient popleft()
     death_ticks = deque(parameters.get("death_ticks", []))
 
+    # Initialize the manager for historical events. For now, it's empty.
+    # Concrete events would be loaded from `parameters` in a full implementation.
+    event_manager = HistoricalEventManager(parameters.get("historical_events", []))
+
     for _ in range(total_ticks):
-        state = advance_tick(state, demand, death_ticks, parameters, rng)
+        state = advance_tick(state, demand, death_ticks, parameters, rng, event_manager)
 
     return state.graph
