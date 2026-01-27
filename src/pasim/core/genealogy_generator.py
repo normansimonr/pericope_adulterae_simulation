@@ -37,6 +37,7 @@ from pasim.core.spatial import generate_random_coordinates
 from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.reputation import sample_reputation
 from pasim.core.historical_events import HistoricalEventManager
+from pasim.core.material_transition_manager import MaterialTransitionManager
 
 
 @dataclass
@@ -153,6 +154,7 @@ def _spawn_new_manuscripts_from_demand(
     death_ticks: Deque[int],
     params: Dict[str, Any],
     rng: RNG,
+    material_transition_manager: MaterialTransitionManager,
 ) -> GenerationState:
     """Spawns new manuscripts to meet exogenous demand.
 
@@ -177,6 +179,7 @@ def _spawn_new_manuscripts_from_demand(
         death_ticks: A queue of pre-calculated death ticks for new manuscripts.
         params: Dictionary of simulation parameters.
         rng: The random number generator.
+        material_transition_manager: The manager for time-dependent material probabilities.
 
     Returns:
         The updated simulation state.
@@ -211,11 +214,13 @@ def _spawn_new_manuscripts_from_demand(
                     rng, params.get("reputation_distribution")
                 )
 
+                material = material_transition_manager.get_material_for_tick(current_tick, rng)
+
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
                     birth_tick=current_tick,
                     death_tick=death_ticks.popleft(),
-                    material=rng.choice(list(Material)),
+                    material=material,
                     region=region,
                     location=location,
                 )
@@ -274,6 +279,7 @@ def advance_tick(
     params: Dict[str, Any],
     rng: RNG,
     event_manager: HistoricalEventManager,
+    material_transition_manager: MaterialTransitionManager,
 ) -> GenerationState:
     """Advances the simulation clock and orchestrates per-tick events.
 
@@ -284,6 +290,7 @@ def advance_tick(
         params: Dictionary of simulation parameters, including migration probabilities.
         rng: The random number generator for this simulation.
         event_manager: The manager for historical events.
+        material_transition_manager: The manager for time-dependent material probabilities.
 
     Returns:
         The updated state after processing the tick.
@@ -305,7 +312,7 @@ def advance_tick(
     )
 
     # 4. Spawn new manuscripts based on demand (mechanistic)
-    state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, params, rng)
+    state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, params, rng, material_transition_manager)
 
     return state
 
@@ -329,6 +336,8 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             - 'death_ticks': An iterable of pre-calculated death ticks.
             May also contain keys for historical event configurations, such as:
             - 'persecutions': A list of persecution event dictionaries.
+            And for material transition rules:
+            - 'material_transitions': A list of material distribution schedules.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
@@ -348,13 +357,23 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
     for config in parameters.get("persecutions", []):
         event_configs.append({**config, "event_type": "persecution"})
     
-    # Future event types (e.g., material transitions) would be added here
-    # for config in parameters.get("material_transitions", []):
-    #     event_configs.append({**config, "event_type": "material_transition"})
-
+    # Initialize event manager
     event_manager = HistoricalEventManager(event_configs)
 
+    # Initialize material transition manager
+    material_transition_manager = MaterialTransitionManager(
+        parameters.get("material_transitions", [])
+    )
+
     for _ in range(total_ticks):
-        state = advance_tick(state, demand, death_ticks, parameters, rng, event_manager)
+        state = advance_tick(
+            state,
+            demand,
+            death_ticks,
+            parameters,
+            rng,
+            event_manager,
+            material_transition_manager,
+        )
 
     return state.graph
