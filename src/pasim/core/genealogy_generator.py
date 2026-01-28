@@ -38,6 +38,7 @@ from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.reputation import sample_reputation
 from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.material_transition_manager import MaterialTransitionManager
+from pasim.core.script_transition_manager import ScriptTransitionManager
 
 
 @dataclass
@@ -155,6 +156,7 @@ def _spawn_new_manuscripts_from_demand(
     params: Dict[str, Any],
     rng: RNG,
     material_transition_manager: MaterialTransitionManager,
+    script_transition_manager: ScriptTransitionManager,
 ) -> GenerationState:
     """Spawns new manuscripts to meet exogenous demand.
 
@@ -180,6 +182,7 @@ def _spawn_new_manuscripts_from_demand(
         params: Dictionary of simulation parameters.
         rng: The random number generator.
         material_transition_manager: The manager for time-dependent material probabilities.
+        script_transition_manager: The manager for time-dependent script probabilities.
 
     Returns:
         The updated simulation state.
@@ -238,8 +241,11 @@ def _spawn_new_manuscripts_from_demand(
                 # 3. Create Witness and WitnessInstance (Graph Node)
                 witness_id = f"W{next(state.witness_id_counter)}"
                 instance_id = f"I{next(state.witness_instance_id_counter)}"
+                script = script_transition_manager.get_script_for_tick(current_tick, rng)
                 witness = Witness(
-                    witness_id=witness_id, manuscript_id=manuscript_id
+                    witness_id=witness_id,
+                    manuscript_id=manuscript_id,
+                    script=script,
                 )
                 state.registries.witnesses.add(witness)
 
@@ -280,6 +286,7 @@ def advance_tick(
     rng: RNG,
     event_manager: HistoricalEventManager,
     material_transition_manager: MaterialTransitionManager,
+    script_transition_manager: ScriptTransitionManager,
 ) -> GenerationState:
     """Advances the simulation clock and orchestrates per-tick events.
 
@@ -291,6 +298,7 @@ def advance_tick(
         rng: The random number generator for this simulation.
         event_manager: The manager for historical events.
         material_transition_manager: The manager for time-dependent material probabilities.
+        script_transition_manager: The manager for time-dependent script probabilities.
 
     Returns:
         The updated state after processing the tick.
@@ -312,7 +320,9 @@ def advance_tick(
     )
 
     # 4. Spawn new manuscripts based on demand (mechanistic)
-    state = _spawn_new_manuscripts_from_demand(state, demand, death_ticks, params, rng, material_transition_manager)
+    state = _spawn_new_manuscripts_from_demand(
+        state, demand, death_ticks, params, rng, material_transition_manager, script_transition_manager
+    )
 
     return state
 
@@ -323,7 +333,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
     This function drives the entire deterministic, tick-based process of
     generating a manuscript genealogy graph. It initialises the simulation
     state and then iterates through the specified number of ticks, calling
-    `advance_tick` for each step.
+    `run_genealogy_generator` for each step.
 
     The generation process is deterministic: given the same `parameters` and a
     identically-seeded `rng`, it will always produce the exact same genealogy.
@@ -336,8 +346,9 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             - 'death_ticks': An iterable of pre-calculated death ticks.
             May also contain keys for historical event configurations, such as:
             - 'persecutions': A list of persecution event dictionaries.
-            And for material transition rules:
+            And for transition rules:
             - 'material_transitions': A list of material distribution schedules.
+            - 'script_transitions': A list of script distribution schedules.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
@@ -365,6 +376,11 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
         parameters.get("material_transitions", [])
     )
 
+    # Initialize script transition manager
+    script_transition_manager = ScriptTransitionManager(
+        parameters.get("script_transitions", [])
+    )
+
     for _ in range(total_ticks):
         state = advance_tick(
             state,
@@ -374,6 +390,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             rng,
             event_manager,
             material_transition_manager,
+            script_transition_manager,
         )
 
     return state.graph

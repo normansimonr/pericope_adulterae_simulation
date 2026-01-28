@@ -31,13 +31,19 @@ This separation ensures that the abstract genealogical structure remains clean a
 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
 
-### Simulation Dynamics: Mechanistic vs. Historical Rules
+### Simulation Dynamics: Shocks vs. Environments
 
-The simulation distinguishes between two fundamental types of dynamics:
+The simulation distinguishes between two fundamental types of dynamics, which allows for a nuanced and modular approach to modeling historical change:
 
--   **Mechanistic Rules**: These are the continuous, local, and emergent processes that drive the simulation forward tick by tick. They include manuscript death, migration, and demand-based spawning (copying). These rules are fundamental to the simulation's engine and are applied consistently.
+-   **Historical Events (Shocks)**: These represent discrete, time-bound, and often global "shocks" or transitions that are imposed on the simulation from the outside. Managed by the **Temporal-Historical Rule Engine** (`historical_events.py`), these events model exogenous phenomena that cause immediate changes to existing entities. For example, a `PersecutionEvent` can be configured to destroy a certain proportion of manuscripts in a specific region and time period. This plug-in architecture allows researchers to easily add, remove, or modify historical scenarios without altering the core simulation loop.
 
--   **Historical Rules**: These represent discrete, time-bound, and often global "shocks" or transitions that are imposed on the simulation from the outside. Managed by the **Temporal-Historical Rule Engine** (`historical_events.py`), these events model exogenous phenomena. For example, a `PersecutionEvent` can be configured to destroy a certain proportion of manuscripts in a specific region and time period. This plug-in architecture allows researchers to easily add, remove, or modify historical scenarios without altering the core simulation loop.
+-   **Transition Regimes (Environments)**: These represent persistent, long-term environmental conditions that evolve over time. They are modeled as time-dependent probability distributions that affect **only newly created entities**, not existing ones. This mechanism is ideal for simulating gradual cultural or technological shifts.
+    -   The `MaterialTransitionManager` (`material_transition_manager.py`) governs the probability of a new manuscript being made of a certain material (e.g., papyrus, parchment).
+    -   The `ScriptTransitionManager` (`script_transition_manager.py`) governs the probability of a new witness being written in a certain script (e.g., uncial, minuscule).
+
+This core distinction—shocks that alter existing state versus environments that shape new state—provides a powerful and flexible framework for constructing complex historical simulations.
+
+-   **Mechanistic Rules**: These are the continuous, local, and emergent processes that drive the simulation forward tick by tick. They include manuscript death, migration, and demand-based spawning (copying). These rules are fundamental to the simulation's engine and are applied consistently. They operate within the context of the environments set by the transition regimes.
 
 -   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
     -   `exemplar_selection.py`: Implements the two-stage exemplar selection logic, which combines geographical proximity with textual authority (reputation) to choose parents for new manuscripts.
@@ -51,6 +57,7 @@ The simulation distinguishes between two fundamental types of dynamics:
     -   `mutation.py`: Defines the mechanical operator that applies scribal mutations to a tagged string. It takes an expected proportion of segments to change and, under controlled randomness, alters the required number of segments to other legal values.
     -   `rng.py`: Implements the centralized random number generation (RNG) factory. This factory ensures full reproducibility across runs and safe parallel execution by managing `numpy.random.Generator` and `numpy.random.SeedSequence` objects, derived from a single batch-level seed.
     -   `material_transition_manager.py`: Manages the time-dependent probability distribution for new manuscript materials (e.g., papyrus, parchment, paper). This is a persistent rule, not a historical event, affecting only newly spawned manuscripts to reflect historical technological shifts.
+    -   `script_transition_manager.py`: Manages the time-dependent probability distribution for new witness scripts (e.g., uncial, minuscule). This rule affects only newly created witnesses to model the gradual evolution of script styles.
     -   `spatial.py`: Provides utilities for handling spatial assignments of manuscripts, ensuring region-specific coordinate generation and maintaining the architectural separation of spatial properties from genealogy nodes.
     -   `state.py`: Defines the core data structures and identity registries for the simulation. This includes `Manuscript` and `Witness` data classes, as well as the `ManuscriptRegistry` and `WitnessRegistry` that manage the unique identities of these entities. A top-level `StateRegistry` class holds these registries, providing a consistent snapshot of what exists in the simulation.
 -   **`config/`**: Manages the configuration and parameters for the simulations.

@@ -18,6 +18,15 @@ class Region(Enum):
     EGYPT = "Egypt"
     LEVANT = "Levant"
 
+
+class Script(Enum):
+    """
+    Represents the script style used in a textual witness.
+    """
+    UNCIAL = "uncial"
+    MINUSCULE = "minuscule"
+
+
 @dataclass
 class Manuscript:
     """
@@ -84,6 +93,12 @@ class Witness:
     """
     The identifier of the `Manuscript` to which this witness belongs.
     This provides the link to the physical entity.
+    """
+
+    script: Script = field()
+    """
+    The script style used in this witness (e.g., uncial, minuscule).
+    This attribute is immutable for the lifespan of the witness.
     """
 
     metadata: Dict[str, Any] = field(default_factory=dict)
