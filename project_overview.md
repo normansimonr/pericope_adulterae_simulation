@@ -27,6 +27,19 @@ The relationship can be visualized as:
 
 This separation ensures that the abstract genealogical structure remains clean and unburdened by the evolving physical properties of the manuscripts.
 
+## Configuration and Parameterization
+
+The simulation is designed to be fully parameter-driven, allowing researchers to define and explore a wide range of historical scenarios without altering the core source code. All configuration is managed through a centralized, validated schema.
+
+-   **Authoritative Schema**: The single source of truth for all simulation parameters is `src/pasim/config/schema.py`. This module uses `Pydantic` to define a hierarchical `SimulationConfig` model, which ensures that any given configuration is not only structurally correct but also logically valid (e.g., probabilities sum to 1.0, specified regions are valid).
+
+-   **Validated Parameter Access**: The main simulation entry point, `run_genealogy_generator`, validates the user-provided parameters against the `SimulationConfig` model at the very beginning of a run. The rest of the simulation then interacts with the resulting type-safe `config` object, not raw dictionaries, preventing a large class of potential errors.
+
+-   **Historical Drivers**: The configuration schema makes a clear distinction between three types of historical drivers:
+    1.  **Historical Shocks** (e.g., `persecutions`): Discrete, instantaneous events that "shock" the system, such as a persecution that destroys a fraction of manuscripts at a specific time.
+    2.  **Environmental Regimes** (e.g., `material_transitions`, `script_transitions`): Long-term, evolving environmental conditions that affect the properties of **newly created** entities. This is used to model gradual shifts in technology or culture.
+    3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics, like the demand for new manuscripts over time. The demand schedule has special logic to handle missing ticks by using the last known value, ensuring continuity.
+
 ## Architecture and Structure
 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
@@ -61,7 +74,7 @@ This core distinction—shocks that alter existing state versus environments tha
     -   `spatial.py`: Provides utilities for handling spatial assignments of manuscripts, ensuring region-specific coordinate generation and maintaining the architectural separation of spatial properties from genealogy nodes.
     -   `state.py`: Defines the core data structures and identity registries for the simulation. This includes `Manuscript` and `Witness` data classes, as well as the `ManuscriptRegistry` and `WitnessRegistry` that manage the unique identities of these entities. A top-level `StateRegistry` class holds these registries, providing a consistent snapshot of what exists in the simulation.
 -   **`config/`**: Manages the configuration and parameters for the simulations.
-    -   `schema.py`: Will define the validation schema for simulation configuration files.
+    -   `schema.py`: Defines the complete, hierarchical validation schema for all simulation parameters using `Pydantic`. This is the single source of truth for configuration.
 -   **`execution/`**: Handles the orchestration and running of simulations.
     -   `runner.py`: Will execute a single simulation run.
     -   `batch.py`: For managing and running multiple simulations in batches.

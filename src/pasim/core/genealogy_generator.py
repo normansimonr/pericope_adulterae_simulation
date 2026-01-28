@@ -3,10 +3,28 @@ Genealogy Generator with Death, Migration, and Demand-Based Spawning.
 
 This module provides a tick-based orchestration for generating a manuscript
 genealogy. It defines the core control flow, state representation, and interfaces
-for the generation process, including:
-- Manuscript "death" handling.
-- Manuscript migration between and within regions.
-- Demand-based manuscript spawning.
+for the generation process.
+
+Temporal Execution Pipeline:
+The simulation advances tick by tick, with each tick comprising a series of
+discrete stages executed in a strict order to ensure determinism and logical
+consistency. The pipeline is as follows:
+1.  **Advance Tick**: The global simulation clock is incremented.
+2.  **Handle Scheduled Deaths**: Manuscripts scheduled to "die" on the current
+    tick are removed from the pool of living manuscripts available for copying.
+3.  **Apply Historical Events**: Exogenous shocks (e.g., persecutions) managed
+    by the HistoricalEventManager are applied, potentially altering the state
+    of existing manuscripts.
+4.  **Handle Migration**: Living manuscripts may relocate between or within
+    regions, affecting their geographical properties.
+5.  **Spawn New Manuscripts**: New manuscripts are created to meet regional demand,
+    with their properties (e.g., material, script) determined by the active
+    environmental transition regimes.
+6.  **Select Exemplars**: For each newly spawned manuscript, parent exemplars
+    are selected from the pool of living, post-migration manuscripts.
+7.  **(Future) Scribal Copying**: The textual content of new manuscripts is
+    generated based on their selected exemplars, including any scribal
+    alterations.
 
 The generator's design enforces a strict separation of concerns:
 - **Genealogy Graph**: Nodes are abstract "witness instances." The graph topology
@@ -39,6 +57,7 @@ from pasim.core.reputation import sample_reputation
 from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.script_transition_manager import ScriptTransitionManager
+from pasim.config.schema import SimulationConfig, get_demand_for_tick
 
 
 @dataclass
@@ -151,9 +170,9 @@ def handle_migration(
 
 def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
-    demand: Dict[int, Dict[Region, int]],
+    demand_today: Dict[Region, int],
     death_ticks: Deque[int],
-    params: Dict[str, Any],
+    params: SimulationConfig,
     rng: RNG,
     material_transition_manager: MaterialTransitionManager,
     script_transition_manager: ScriptTransitionManager,
@@ -177,9 +196,9 @@ def _spawn_new_manuscripts_from_demand(
 
     Args:
         state: The current simulation state.
-        demand: A dictionary mapping tick -> region -> demanded count.
+        demand_today: A dictionary defining regional demand for the current tick.
         death_ticks: A queue of pre-calculated death ticks for new manuscripts.
-        params: Dictionary of simulation parameters.
+        params: The validated simulation configuration object.
         rng: The random number generator.
         material_transition_manager: The manager for time-dependent material probabilities.
         script_transition_manager: The manager for time-dependent script probabilities.
@@ -188,7 +207,6 @@ def _spawn_new_manuscripts_from_demand(
         The updated simulation state.
     """
     current_tick = state.tick
-    demand_today = demand.get(current_tick, {})
     if not demand_today:
         return state
 
@@ -214,7 +232,7 @@ def _spawn_new_manuscripts_from_demand(
                 manuscript_id = f"M{next(state.manuscript_id_counter)}"
                 location = generate_random_coordinates(region, rng)
                 reputation = sample_reputation(
-                    rng, params.get("reputation_distribution")
+                    rng, params.reputation_distribution
                 )
 
                 material = material_transition_manager.get_material_for_tick(current_tick, rng)
@@ -280,9 +298,9 @@ def _spawn_new_manuscripts_from_demand(
 
 def advance_tick(
     state: GenerationState,
-    demand: Dict[int, Dict[Region, int]],
+    demand_today: Dict[Region, int],
     death_ticks: Deque[int],
-    params: Dict[str, Any],
+    params: SimulationConfig,
     rng: RNG,
     event_manager: HistoricalEventManager,
     material_transition_manager: MaterialTransitionManager,
@@ -292,9 +310,9 @@ def advance_tick(
 
     Args:
         state: The current state of the genealogy generation.
-        demand: A dictionary defining regional demand per tick.
+        demand_today: A dictionary defining regional demand for the current tick.
         death_ticks: A queue of pre-calculated death ticks.
-        params: Dictionary of simulation parameters, including migration probabilities.
+        params: The validated simulation configuration object.
         rng: The random number generator for this simulation.
         event_manager: The manager for historical events.
         material_transition_manager: The manager for time-dependent material probabilities.
@@ -315,13 +333,13 @@ def advance_tick(
     state = handle_migration(
         state=state,
         rng=rng,
-        p_region_migration=params.get("p_region_migration", 0.0),
-        p_internal_relocation=params.get("p_internal_relocation"),
+        p_region_migration=params.p_region_migration,
+        p_internal_relocation=params.p_internal_relocation,
     )
 
     # 4. Spawn new manuscripts based on demand (mechanistic)
     state = _spawn_new_manuscripts_from_demand(
-        state, demand, death_ticks, params, rng, material_transition_manager, script_transition_manager
+        state, demand_today, death_ticks, params, rng, material_transition_manager, script_transition_manager
     )
 
     return state
@@ -333,22 +351,14 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
     This function drives the entire deterministic, tick-based process of
     generating a manuscript genealogy graph. It initialises the simulation
     state and then iterates through the specified number of ticks, calling
-    `run_genealogy_generator` for each step.
+    `advance_tick` for each step.
 
     The generation process is deterministic: given the same `parameters` and a
     identically-seeded `rng`, it will always produce the exact same genealogy.
 
     Args:
-        parameters (Dict[str, Any]): A dictionary of simulation parameters.
-            Must include:
-            - 'total_ticks': Total number of ticks to simulate.
-            - 'demand': Dictionary mapping tick -> region -> count.
-            - 'death_ticks': An iterable of pre-calculated death ticks.
-            May also contain keys for historical event configurations, such as:
-            - 'persecutions': A list of persecution event dictionaries.
-            And for transition rules:
-            - 'material_transitions': A list of material distribution schedules.
-            - 'script_transitions': A list of script distribution schedules.
+        parameters (Dict[str, Any]): A dictionary of simulation parameters,
+                                     validated against `SimulationConfig`.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
@@ -356,41 +366,39 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
         nx.DiGraph: The final generated genealogy graph, where nodes represent
                     witness instances and edges represent copying events.
     """
-    state = initialise_generation_state()
-    total_ticks = parameters.get("total_ticks", 0)
-    demand = parameters.get("demand", {})
-    # Use a deque for efficient popleft()
-    death_ticks = deque(parameters.get("death_ticks", []))
+    # 1. Validate and structure parameters
+    config = SimulationConfig(**parameters)
 
-    # Assemble historical event configurations from parameters
-    event_configs = []
-    # Add persecution events
-    for config in parameters.get("persecutions", []):
-        event_configs.append({**config, "event_type": "persecution"})
+    # 2. Initialize state and managers
+    state = initialise_generation_state()
+    death_ticks = deque(config.death_ticks)
+
+    event_configs = [p.dict() for p in config.persecutions]
+    for event_config in event_configs:
+        event_config["event_type"] = "persecution"
     
-    # Initialize event manager
     event_manager = HistoricalEventManager(event_configs)
 
-    # Initialize material transition manager
     material_transition_manager = MaterialTransitionManager(
-        parameters.get("material_transitions", [])
+        [m.dict() for m in config.material_transitions]
     )
-
-    # Initialize script transition manager
     script_transition_manager = ScriptTransitionManager(
-        parameters.get("script_transitions", [])
+        [s.dict() for s in config.script_transitions]
     )
 
-    for _ in range(total_ticks):
+    # 3. Run simulation loop
+    for _ in range(config.total_ticks):
+        demand_today = get_demand_for_tick(parameters, state.tick + 1)
+        
         state = advance_tick(
-            state,
-            demand,
-            death_ticks,
-            parameters,
-            rng,
-            event_manager,
-            material_transition_manager,
-            script_transition_manager,
+            state=state,
+            demand_today=demand_today,
+            death_ticks=death_ticks,
+            params=config,
+            rng=rng,
+            event_manager=event_manager,
+            material_transition_manager=material_transition_manager,
+            script_transition_manager=script_transition_manager,
         )
 
     return state.graph
