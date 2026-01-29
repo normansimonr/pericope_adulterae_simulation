@@ -104,3 +104,509 @@ The `pasim` framework will facilitate the following general workflow for researc
 6.  **Reporting**: Results and analyses will be outputted in various formats for researchers to study.
 
 This setup enables researchers to explore various hypotheses about the textual history of the Pericope Adulterae by adjusting simulation parameters and observing the emergent textual traditions.
+
+## Detailed Module and File Summaries
+
+### `src/pasim/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `pasim` directory as a Python package. It does not contain any functional code or exposed modules.
+
+### `src/pasim/analysis/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `analysis` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/analysis/metrics.py`
+
+This file is currently empty. It is intended to house functions and classes related to defining and calculating simulation metrics, as outlined in the `project_overview.md`.
+
+### `src/pasim/analysis/plots.py`
+
+This file is currently empty. It is intended to house functions for generating visualizations of simulation results, as outlined in the `project_overview.md`.
+
+### `src/pasim/analysis/statistics.py`
+
+This file is currently empty. It is intended to house functions for performing statistical analysis of simulation outputs, as outlined in the `project_overview.md`.
+
+### `src/pasim/cli.py`
+
+This file is currently empty. It is intended to serve as the command-line interface entry point for interacting with the simulation framework, as outlined in the `project_overview.md`. It will likely define commands and arguments for running simulations, configuring parameters, and initiating analysis.
+
+### `src/pasim/config/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `config` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/config/schema.py`
+
+This module defines the comprehensive, hierarchical configuration schema for `pasim` simulations using Pydantic. It acts as the single source of truth for validating simulation parameters, ensuring structural correctness and logical validity (e.g., probabilities summing to 1.0, sequential `start_tick` values).
+
+**Key Pydantic Models:**
+
+*   **`PersecutionEventConfig`:** Configures a single historical "shock" event.
+    *   `start_tick`, `end_tick`: Define the temporal scope of the event.
+    *   `regions`: A list of region names where the persecution applies, validated against `pasim.core.state.Region` enum.
+    *   `kill_proportion`: The proportion of manuscripts to destroy (0.0 to 1.0).
+    *   Includes validators to ensure valid regions and correct tick ordering.
+*   **`MaterialTransitionConfig`:** Configures a point in time where the probability distribution for new manuscript materials changes.
+    *   `start_tick`: The tick at which this distribution becomes active.
+    *   `distribution`: A dictionary mapping `Material` names (e.g., 'papyrus', 'parchment') to their probabilities, validated to sum to 1.0 and use valid `Material` enum values.
+*   **`ScriptTransitionConfig`:** Similar to `MaterialTransitionConfig`, but for `Script` types (e.g., 'uncial', 'minuscule').
+    *   `start_tick`: The tick at which this distribution becomes active.
+    *   `distribution`: A dictionary mapping `Script` names to their probabilities, validated to sum to 1.0 and use valid `Script` enum values.
+*   **`DemandScheduleConfig`:** Defines the demand for new manuscripts across different regions over time.
+    *   `__root__`: A dictionary where keys are ticks (integers) and values are dictionaries mapping `Region` names to the integer demand count for that tick.
+    *   Includes validators for tick values, region names, and demand counts.
+*   **`SimulationConfig`:** The root model encompassing all simulation parameters.
+    *   `total_ticks`: The total duration of the simulation.
+    *   `p_region_migration`: Probability of a manuscript migrating to a different region.
+    *   `p_internal_relocation`: Probability of a manuscript relocating within its current region.
+    *   `reputation_distribution`: A list representing the distribution of reputation scores.
+    *   `death_ticks`: A list of pre-generated death ticks for new manuscripts.
+    *   Includes lists of `PersecutionEventConfig`, `MaterialTransitionConfig`, and `ScriptTransitionConfig` objects.
+    *   `demand_schedule`: An instance of `DemandScheduleConfig`.
+    *   Includes validators to ensure `start_tick` values in transition schedules are strictly increasing.
+
+**Utility Functions:**
+
+*   **`get_persecution_events(params: dict)`:** Extracts and validates persecution event configurations from a raw parameter dictionary.
+*   **`get_material_schedule(params: dict)`:** Extracts and validates material transition schedules.
+*   **`get_script_schedule(params: dict)`:** Extracts and validates script transition schedules.
+*   **`get_demand_for_tick(params: dict, tick: int)`:** Returns the demand for a specific tick, implementing logic to use the last known demand value if the current tick is not explicitly defined in the schedule.
+
+This module is crucial for ensuring that all simulations run with well-formed and logically consistent parameters, preventing a large class of potential errors.
+
+### `src/pasim/core/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `core` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/core/exemplar_selection.py`
+
+This module, `exemplar_selection.py`, provides the `select_exemplars` function, which implements the crucial logic for choosing parent exemplars (source manuscripts) for a newly spawned manuscript. The selection process is designed as a two-stage filter, prioritizing both geographical proximity and textual authority (reputation), reflecting a nuanced model of manuscript transmission.
+
+**Key Functionality and Process (`select_exemplars`):**
+
+1.  **Geographical Filtering**:
+    *   Takes `new_manuscript` (the manuscript needing parents) and a list of `alive_manuscripts_in_region` (all active manuscripts in the same geographical area).
+    *   Calculates the Euclidean distance between the `new_manuscript`'s location and each `alive_manuscript_in_region`'s location.
+    *   Selects the up to 10 closest manuscripts based on this distance, ensuring that local transmission is prioritized.
+2.  **Mapping to Witness Instances**:
+    *   Converts the selected `closest_manuscripts` (physical `Manuscript` objects) into their corresponding `WitnessInstanceID`s, using the `manuscript_to_instance_map`. These witness instances, which are nodes in the genealogy graph, are the actual entities that will serve as exemplars.
+3.  **Reputation-based Ranking**:
+    *   Retrieves the `reputation` attribute from each candidate `WitnessInstance` node in the `graph`.
+    *   Sorts the `candidate_instances` in descending order based on their reputation, giving preference to more authoritative texts.
+4.  **Final Selection**:
+    *   Randomly determines the number of exemplars (`n`) to select from a predefined distribution (currently 80% chance for 1 exemplar, 10% for 2, 10% for 3).
+    *   Selects the top `n` `WitnessInstanceID`s from the reputation-sorted list as the final exemplars.
+
+**Helper Function:**
+
+*   **`_euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float`:** A private utility function to calculate the standard Euclidean distance between two 2D points.
+
+**Separation of Concerns:**
+
+This module distinctly applies geographical constraints at the manuscript level before considering textual authority at the witness instance level, adhering to the project's architectural principle of separating physical manuscript properties from abstract genealogical structure.
+
+### `src/pasim/core/genealogy.py`
+
+This module provides the fundamental building blocks for constructing and managing the `pasim` simulation's genealogy graph, which models the structural and temporal relationships between witness instances. It uses the `networkx` library to represent this genealogy as a Directed Acyclic Graph (DAG), where nodes are witness instances and edges represent copying events.
+
+**Core Principles:**
+
+*   **Topology-focused**: This module is strictly concerned with the graph's topology (identities, ancestry, timing of creation) and explicitly *excludes* any knowledge of the textual content ("tagged strings") of the witnesses. This separation allows the genealogy to serve as a fixed scaffold for various textual evolution models.
+*   **Determinism**: Functions are designed to be deterministic, ensuring reproducible graph construction given the same inputs.
+
+**Key Components and Functions:**
+
+*   **`GenealogyGraph` (Type Alias):** Simply an alias for `networkx.DiGraph`.
+*   **`create_empty_genealogy() -> GenealogyGraph`:** Returns an empty `networkx.DiGraph` instance, ready for population.
+*   **`add_root_node(...)`:** Adds a witness instance node to the graph that has no parents (a root of a lineage).
+    *   Takes `graph`, `node_id` (unique identifier), `witness_id` (foreign key to `Witness` registry), `manuscript_id` (foreign key to `Manuscript` registry), `birth_tick`, `reputation`, and an optional `death_tick` as attributes for the node.
+    *   Raises `ValueError` if `node_id` already exists.
+*   **`add_child_node(...)`:** Adds a new witness instance node as a child of one or more existing parent nodes, representing a copying event.
+    *   Takes similar parameters to `add_root_node`, plus `parent_node_ids` (a list of parent node IDs).
+    *   Adds edges from each parent to the new child.
+    *   Includes validation to prevent adding to non-existent parents and to ensure that adding the node and its edges does not introduce a cycle into the graph (raises `networkx.HasACycle`).
+*   **`validate_genealogy(graph: GenealogyGraph) -> None`:** Performs structural checks on a given graph.
+    *   Verifies that the graph is indeed a `networkx.DiGraph` and a DAG.
+    *   Checks that all nodes contain essential attributes (`witness_id`, `manuscript_id`, `birth_tick`, `reputation`).
+*   **Query Functions:**
+    *   **`get_parents(graph, node_id) -> List[NodeID]`:** Returns a list of parent node IDs for a given node.
+    *   **`get_children(graph, node_id) -> List[NodeID]`:** Returns a list of child node IDs for a given node.
+    *   **`get_roots(graph) -> List[NodeID]`:** Returns all nodes in the graph that have no incoming edges.
+    *   **`get_leaves(graph) -> List[NodeID]`:** Returns all nodes in the graph that have no outgoing edges.
+
+This module is fundamental for representing the lineage and historical development of textual witnesses, forming the backbone upon which textual variations and other simulation aspects are built.
+
+### `src/pasim/core/genealogy_generator.py`
+
+This module, `genealogy_generator.py`, is the central orchestrator for the simulation's core dynamic: generating the manuscript genealogy graph. It implements a tick-based simulation loop, advancing the simulation clock and managing a series of discrete stages within each tick to ensure determinism and logical consistency.
+
+**Key Components and Functions:**
+
+*   **`GenerationState` dataclass:** Encapsulates the complete state of the genealogy generation, including the current `tick`, the `networkx` graph (`graph`), `StateRegistry` (for manuscripts and witnesses), `alive_manuscripts`, and a mapping from manuscript IDs to witness instance IDs (`manuscript_to_instance_map`). It also holds counters for generating unique IDs for manuscripts, witnesses, and witness instances.
+*   **`initialise_generation_state()`:** Creates and returns an empty `GenerationState` object, setting the initial tick to zero and preparing empty data structures.
+*   **`handle_deaths(state: GenerationState)`:** Identifies and removes manuscripts whose `death_tick` has arrived from the `alive_manuscripts` set. This affects their availability for future copying but does not alter the historical record in the graph or registry.
+*   **`handle_migration(state: GenerationState, rng: RNG, p_region_migration: float, p_internal_relocation: Optional[float])`:** Manages the movement of manuscripts. It applies probabilities for manuscripts to migrate between different regions or relocate within their current region, updating their `region` and `location` attributes.
+*   **`_spawn_new_manuscripts_from_demand(...)`:** This private function is responsible for creating new manuscripts to meet regional demand. If the number of alive manuscripts in a region is below the `demanded_count`, new manuscripts are spawned. For each new manuscript, an associated `Witness` and `WitnessInstance` (graph node) are created. It handles the assignment of a `death_tick`, `material` (via `MaterialTransitionManager`), `reputation`, and `script` (via `ScriptTransitionManager`), and performs exemplar selection.
+*   **`advance_tick(...)`:** This is the core per-tick orchestrator. It increments the simulation clock and calls the other stage-specific functions in a strict order: `handle_deaths`, `event_manager.apply_events_for_tick` (historical events), `handle_migration`, and `_spawn_new_manuscripts_from_demand`.
+*   **`run_genealogy_generator(parameters: Dict[str, Any], rng: RNG)`:** The high-level entry point for the genealogy generation. It validates input parameters against `SimulationConfig`, initializes the simulation state and managers (including `HistoricalEventManager`, `MaterialTransitionManager`, and `ScriptTransitionManager`), and then runs the main simulation loop by iteratively calling `advance_tick` for the specified `total_ticks`. It ensures reproducibility by using a seeded NumPy random number generator.
+
+**Separation of Concerns:**
+
+The module emphasizes a clear separation between the abstract `Witness Instance` (nodes in the `networkx` graph representing lineage) and the concrete `Manuscript` (physical objects with rich metadata like region, material, birth/death ticks).
+
+**Exclusions:**
+
+This module explicitly excludes exemplar selection policies (handled by `exemplar_selection.py`), contamination/scribal error models (handled by `scribal_rules.py`, `transmission.py`, `mutation.py`), textual state, and batch execution/file I/O, delegating these responsibilities to other specialized modules.
+
+### `src/pasim/core/historical_events.py`
+
+This module establishes the framework for integrating exogenous historical events, often referred to as "shocks," into the simulation. It distinguishes these events from continuous mechanistic rules by providing a plug-in architecture for discrete, time-bound, and potentially global or regional interventions that modify the simulation state.
+
+**Key Components and Functionality:**
+
+*   **`HistoricalEvent` (Abstract Base Class):**
+    *   Defines the common interface for all historical events.
+    *   Attributes:
+        *   `start_tick` (int): The simulation tick when the event begins.
+        *   `end_tick` (Optional[int]): The tick when the event ends. If `None`, the event is instantaneous at `start_tick`.
+        *   `regions` (Optional[Set[str]]): A set of region identifiers; if `None`, the event applies globally.
+    *   Abstract method `apply(self, state: GenerationState, rng: np.random.Generator)`: Must be implemented by concrete event classes to define the event's effect on the simulation state.
+    *   `is_active(self, tick: int)`: Determines if the event is active at a given tick, considering `start_tick` and `end_tick`.
+*   **`PersecutionEvent` (Concrete Historical Event):**
+    *   A subclass of `HistoricalEvent` that models a "persecution" shock, leading to the destruction of a fraction of manuscripts.
+    *   Attribute `kill_proportion` (float): The percentage of eligible manuscripts to destroy (between 0.0 and 1.0).
+    *   `__post_init__()`: Validates `kill_proportion` to be within the [0, 1] range.
+    *   `apply(...)`:
+        *   Identifies eligible manuscripts based on `state.alive_manuscripts` and the event's `regions`.
+        *   Calculates the number of manuscripts to destroy based on `kill_proportion`.
+        *   Randomly selects victims from the eligible pool using the provided `rng`.
+        *   Removes the selected `victims` from `state.alive_manuscripts`, making them unavailable for future copying.
+*   **`create_event_from_config(config: Dict[str, Any]) -> HistoricalEvent`:**
+    *   A factory function that dynamically creates `HistoricalEvent` objects (e.g., `PersecutionEvent`) from a configuration dictionary, based on an `event_type` field.
+*   **`HistoricalEventManager` class:**
+    *   Manages a collection of `HistoricalEvent` objects.
+    *   `__init__(self, event_configs: Optional[List[Dict[str, Any]]] = None)`:
+        *   Initializes the manager by creating event objects from a list of configuration dictionaries using `create_event_from_config`.
+        *   Sorts the events deterministically by `start_tick` and event class name.
+    *   `apply_events_for_tick(self, state: GenerationState, rng: np.random.Generator)`:
+        *   Iterates through all registered events.
+        *   Identifies events that are `is_active()` for the current `state.tick`.
+        *   Applies each active event to the `state` using its `apply()` method.
+
+This module provides a flexible and extensible mechanism for researchers to define and inject various historical scenarios into the simulation, complementing the continuous mechanistic rules and enabling the study of their impact on textual transmission.
+
+### `src/pasim/core/material_transition_manager.py`
+
+This module implements the `MaterialTransitionManager` class, which is responsible for modeling the historical evolution of writing materials used for manuscripts. It manages a time-dependent schedule that dictates the probability distribution of different materials (e.g., papyrus, parchment, paper) for *newly created* manuscripts as the simulation progresses.
+
+**Key Aspects and Functionality:**
+
+*   **Purpose:** To introduce historical realism by reflecting technological and cultural shifts in manuscript production. It is explicitly *not* a `HistoricalEvent` (which represents discrete "shocks"), but rather a persistent environmental rule that influences the properties of entities at their point of creation. Existing manuscripts are not affected; only new ones spawned by demand are assigned materials based on the current probability distribution.
+*   **`MaterialTransitionManager` class:**
+    *   **`__init__(self, schedule_configs: List[Dict[str, Any]])`:**
+        *   Initializes the manager with a sorted list of `schedule_configs`. Each configuration contains a `start_tick` and a `distribution` (a dictionary mapping material names to probabilities).
+        *   Performs comprehensive validation of the input schedule:
+            *   Checks for an empty schedule (requires at least one entry, e.g., for `start_tick` 0).
+            *   Ensures all material names within the distributions correspond to valid `Material` enum members (from `pasim.core.state`).
+            *   Verifies that all probabilities are non-negative.
+            *   Confirms that the probabilities for each distribution sum to 1.0 (with a numerical tolerance).
+        *   Stores a `_processed_schedule` internally, which contains validated `Material` enum members and their probabilities for efficient runtime use.
+    *   **`get_material_for_tick(self, tick: int, rng: np.random.Generator) -> Material`:**
+        *   Given a `tick` and a NumPy random number generator (`rng`), it identifies the currently active material probability distribution. This is done by finding the configuration entry with the largest `start_tick` that is less than or equal to the current `tick`.
+        *   Uses `rng.choice` to deterministically sample a `Material` enum value from the active distribution.
+        *   A `RuntimeError` is raised if no active distribution can be found for a given tick, although proper configuration should prevent this by having an entry for `start_tick` 0.
+
+This manager is essential for dynamically assigning material properties to new manuscripts in a historically plausible manner, contributing to the complexity and realism of the simulation.
+
+### `src/pasim/core/mutation.py`
+
+This module, `mutation.py`, provides the core mechanistic operator for introducing scribal mutations (errors) into a "tagged string," which represents the textual content of a witness. It defines how a textual witness changes during the copying process based on a specified intensity of mutation.
+
+**Key Functionality (`mutate_tagged_string`):**
+
+*   **Purpose:** To simulate the discrete changes that occur when a scribe copies a text, leading to textual variations. It operates on a NumPy array (`NDArray[np.int16]`) representing the tagged string.
+*   **Inputs:**
+    *   `tagged_string` (NDArray[np.int16]): The input text to be mutated. It is assumed to be valid.
+    *   `rng` (`np.random.Generator`): A seeded NumPy random number generator to ensure all stochastic operations are deterministic and reproducible.
+    *   `expected_proportion` (float): A value between 0.0 and 1.0 representing the desired proportion of segments (elements) in the tagged string that should be mutated. This effectively controls the "error rate" for a given copying event.
+*   **Process:**
+    1.  **Validation:** Checks if `expected_proportion` is within the valid range [0.0, 1.0] and if the `tagged_string` has the correct `TAGGED_STRING_LENGTH` (imported from `tagged_string_constraints`).
+    2.  **No Mutation Case:** If `expected_proportion` is 0.0 or if `n_mutations` rounds to 0, a copy of the original string is returned without changes.
+    3.  **Calculate Number of Mutations:** Determines `n_mutations` by rounding `expected_proportion * TAGGED_STRING_LENGTH`.
+    4.  **Select Indices:** Uses `rng.choice` to randomly select `n_mutations` *unique* indices (positions) within the tagged string where mutations will occur.
+    5.  **Apply Mutations:** For each selected index:
+        *   The current value at that index is retrieved.
+        *   `sample_alternative_value` (from `tagged_string_constraints`) is used to generate a *different* legal value for that segment. This ensures a meaningful change and adherence to defined constraints for segment values.
+        *   The new value replaces the old one in a `copy()` of the original `tagged_string`. The original input string is not modified.
+    6.  **Safety Check:** A final call to `validate_tagged_string` ensures the output string remains valid.
+*   **Determinism:** The function guarantees deterministic output for identical inputs and `rng` states.
+
+**Dependencies:**
+
+*   Relies on `pasim.core.tagged_string_constraints` for `TAGGED_STRING_LENGTH`, `sample_alternative_value`, and `validate_tagged_string`, which define the valid state space for textual segments and how alternative values are sampled.
+
+This module is a fundamental part of the scribal rules pipeline, directly responsible for generating textual variations in the simulated transmission process.
+
+### `src/pasim/core/reputation.py`
+
+This module defines the policy layer for translating an abstract "reputation" score of a witness instance into a concrete "expected proportion of segments" that are likely to be mutated during a copying event. It also provides functionality to sample new reputation scores. This module effectively bridges the high-level concept of textual authority with the low-level mechanics of scribal error introduction.
+
+**Key Components and Functions:**
+
+*   **`DEFAULT_REPUTATION_MAPPING` (Dictionary):** A module-level constant defining a default mapping from integer reputation levels (1-5) to an `expected_proportion` of segments that will mutate. This serves as a baseline, where higher reputation might (or might not, depending on the configured mapping) imply a lower mutation rate.
+*   **`validate_reputation(reputation: int) -> None`:**
+    *   A utility function that validates if a given `reputation` integer is within the legal range of 1 to 5, raising a `ValueError` if it's not.
+*   **`expected_mutation_proportion(reputation: int, mapping: Optional[Dict[int, float]] = None) -> float`:**
+    *   This is the core policy lookup function. It takes a `reputation` level and an optional `mapping` (which defaults to `DEFAULT_REPUTATION_MAPPING`).
+    *   It retrieves the corresponding `expected_proportion` of segments that should mutate for that reputation level.
+    *   Performs validation to ensure the input `reputation` is valid, exists in the mapping, and the retrieved proportion is between 0.0 and 1.0.
+    *   The function is fully deterministic.
+*   **`sample_reputation(rng: np.random.Generator, reputation_distribution: Optional[Dict[int, float]] = None) -> int`:**
+    *   Allows for probabilistic assignment of reputation scores to new witness instances.
+    *   Takes a `rng` (NumPy random number generator) for deterministic sampling and an optional `reputation_distribution` dictionary. If `reputation_distribution` is `None`, it defaults to `DEFAULT_REPUTATION_MAPPING` keys with calculated probabilities to sum to 1.
+    *   Validates the provided `reputation_distribution` to ensure it has keys 1-5, non-negative probabilities, and probabilities summing to 1.0.
+    *   Uses `rng.choice` to sample an integer reputation score (1-5) based on the specified probabilities.
+
+This module plays a critical role in modeling the impact of textual authority on copying fidelity, allowing researchers to explore how perceived quality influences the introduction of textual variations.
+
+### `src/pasim/core/rng.py`
+
+This module provides a centralized and reproducible random number generation (RNG) factory through the `RNGContext` class. Its primary purpose is to ensure determinism and independence of random number streams across multiple simulation runs, particularly in parallel execution environments, all derived from a single master seed.
+
+**Key Concepts and Mechanism:**
+
+*   **Reproducibility:** The entire batch of simulations can be reproduced from a single user-defined integer seed.
+*   **Independence:** Each individual simulation run receives its own independent `numpy.random.Generator`, preventing state contention and ensuring results are identical regardless of execution order or degree of parallelism.
+*   **Modern NumPy API:** Utilizes `numpy.random.SeedSequence` and `numpy.random.Generator` for robust and efficient RNG management.
+
+**`RNGContext` Class:**
+
+*   **`__init__(self, seed: Optional[int] = None)`:**
+    *   Initializes the `RNGContext` with a master `seed`.
+    *   If `seed` is `None`, a default fixed seed (`20240105`) is used to ensure reproducibility even without explicit user input.
+    *   Creates a root `numpy.random.SeedSequence` from this effective seed. This root sequence is the source for all subsequent child sequences.
+*   **`spawn(self, n: int) -> List[np.random.Generator]`:**
+    *   This method is the core factory. It takes an integer `n` and returns a list of `n` independent `numpy.random.Generator` instances.
+    *   It achieves independence and determinism by using the root `SeedSequence` to `spawn()` `n` child `SeedSequence` objects. Each of these child sequences is then used to initialize a new `numpy.random.Generator`.
+    *   Calling `spawn()` multiple times with the same `n` on the same `RNGContext` instance will always produce the identical list of generators.
+
+**Usage Guideline:**
+
+*   Users (other modules in the simulation) should *not* directly use `numpy.random` functions. Instead, they should obtain a `np.random.Generator` instance from `RNGContext` and pass it to functions that require randomness.
+
+This module is critical for maintaining scientific rigor and enabling robust testing and analysis of the simulation's stochastic elements, guaranteeing that experiments can be precisely replicated.
+
+### `src/pasim/core/scribal_rules.py`
+
+This module, `scribal_rules.py`, implements the overarching "composite scribal rule" by orchestrating several lower-level primitives into a coherent pipeline. It simulates the complete process a scribe undergoes when copying a text, from using parent exemplars to introducing mutations, thereby forming the core of the textual evolution model.
+
+**Key Functionality (`apply_scribal_rule`):**
+
+*   **Purpose:** To produce a new, potentially mutated, tagged string for a new witness instance based on its parent exemplars and the scribe's (or witness's) reputation.
+*   **Inputs:**
+    *   `exemplar_texts` (`List[TaggedString]`): A list of one or more `TaggedString` (NumPy arrays) representing the texts of the parent exemplars.
+    *   `rng` (`np.random.Generator`): A seeded NumPy random number generator for all stochastic operations (e.g., tie-breaking in majority voting, mutation selection).
+    *   `reputation` (int): The integer reputation level (1-5) of the new witness, which directly influences the expected error intensity.
+    *   `mutation_mapping` (Optional[Dict[int, float]]): An optional dictionary to override the default mapping from reputation to mutation proportion.
+*   **Scribal Pipeline Stages:**
+    1.  **Base Transmission:**
+        *   If there's only one exemplar, the `copy_from_single_exemplar` function (from `transmission.py`) is used to create a base text directly.
+        *   If there are multiple exemplars, `majority_from_exemplars` (from `transmission.py`) is used. This function combines the texts by applying segment-wise majority voting, with `rng` used for tie-breaking, to produce a single resolved base text.
+    2.  **Error Intensity Determination:**
+        *   The `expected_mutation_proportion` function (from `reputation.py`) is called with the `reputation` of the new witness and the optional `mutation_mapping`. This translates the abstract reputation score into a concrete `expected_proportion` of segments to be mutated.
+    3.  **Mutation:**
+        *   Finally, the `mutate_tagged_string` function (from `mutation.py`) is applied to the `base_text`. It uses the `rng` and the `expected_proportion` to introduce the specified number of random changes to the text.
+*   **Output:** A `TaggedString` (NumPy array) representing the text of the newly created witness instance after the copying and mutation process.
+*   **Determinism:** The function ensures full determinism given consistent inputs and `rng` state.
+
+**Dependencies:**
+
+*   `pasim.core.transmission`: For base text generation from single or multiple exemplars.
+*   `pasim.core.reputation`: For determining the expected mutation proportion based on reputation.
+*   `pasim.core.mutation`: For applying the actual segment-level mutations.
+
+This module is central to simulating the emergent textual variations in the simulation, integrating policy (reputation) with mechanics (mutation) to model scribal behavior realistically.
+
+### `src/pasim/core/script_transition_manager.py`
+
+This module implements the `ScriptTransitionManager` class, which is responsible for managing the time-dependent probability distribution of script styles for newly created witnesses throughout the simulation. It models gradual historical shifts in script usage (e.g., from uncial to minuscule).
+
+**Key Aspects and Functionality:**
+
+*   **Purpose:** To define environmental regimes that affect the properties of *newly created* entities, specifically the `script` attribute of `Witness` objects. It is distinct from `HistoricalEvent` as it does not represent an instantaneous "shock" but rather a persistent rule influencing continuous processes.
+*   **`ScriptTransitionManager` class:**
+    *   **`__init__(self, schedule_configs: List[Dict[str, Any]])`:**
+        *   Initializes the manager with a sorted list of `schedule_configs`. Each configuration specifies a `start_tick` and a `distribution` (a dictionary mapping script names to probabilities).
+        *   Performs rigorous validation during initialization:
+            *   Ensures the schedule is not empty.
+            *   Validates that all script names in the distributions correspond to valid `Script` enum members (defined in `pasim.core.state`).
+            *   Checks that all probabilities are non-negative.
+            *   Verifies that the probabilities for each `start_tick` distribution sum to 1.0 (with a small floating-point tolerance).
+        *   Stores a `_processed_schedule` containing validated script enum values and their probabilities for efficient lookup.
+    *   **`get_script_for_tick(self, tick: int, rng: np.random.Generator) -> Script`:**
+        *   Determines the active script probability distribution based on the given `tick`. It finds the latest `start_tick` in the schedule that is less than or equal to the current `tick`.
+        *   Uses the provided NumPy random number generator (`rng`) to sample a `Script` enum value from the active distribution.
+        *   Ensures deterministic sampling if the `rng` is seeded.
+
+This manager is a crucial component for introducing historical realism into the simulation by modeling evolving cultural or technological influences on manuscript production without altering already existing manuscripts.
+
+### `src/pasim/core/spatial.py`
+
+This module, `spatial.py`, provides utility functions for managing the spatial assignments of manuscripts within the simulation. It reinforces the architectural decision that geographical properties are associated with the physical `Manuscript` objects rather than the abstract genealogy nodes.
+
+**Key Components and Functions:**
+
+*   **`REGION_BOUNDS` (Dictionary Constant):**
+    *   Defines the bounding box for each geographical `Region` (from `pasim.core.state.Region`).
+    *   Each region is assigned its own independent planar (x, y) coordinate space. Coordinates are *not* comparable across regions (e.g., `(50, 50)` in "Asia Minor" is not geographically related to `(50, 50)` in "Egypt").
+    *   The format is `Region: ((xmin, xmax), (ymin, ymax))`.
+*   **`generate_random_coordinates(region: Region, rng: RNG) -> Tuple[float, float]`:**
+    *   **Purpose:** To deterministically generate random (x, y) coordinates for a manuscript within the defined boundaries of a specified `region`.
+    *   **Inputs:**
+        *   `region` (`Region`): The enum value for the geographical region.
+        *   `rng` (`np.random.Generator`): A seeded NumPy random number generator to ensure reproducibility.
+    *   **Process:**
+        *   Looks up the `x` and `y` bounds for the given `region` in `REGION_BOUNDS`.
+        *   Uses `rng.uniform()` to sample a random floating-point `x` coordinate within `x_bounds` and a random `y` coordinate within `y_bounds`.
+    *   **Output:** A tuple `(x, y)` representing the generated coordinates.
+    *   **Error Handling:** Raises a `ValueError` if the provided `region` does not have defined bounds in `REGION_BOUNDS`.
+
+This module is crucial for spatial modeling, enabling the simulation to factor in geographical proximity for processes like exemplar selection, while maintaining a clear separation of concerns regarding manuscript properties.
+
+### `src/pasim/core/state.py`
+
+This module defines the fundamental data structures and identity registries that represent the core state of the `pasim` simulation. It establishes the conceptual entities of `Material`, `Region`, `Script`, `Manuscript`, and `Witness`, along with registries to manage their instances.
+
+**Key Components:**
+
+*   **Enums:**
+    *   **`Material`**: An `Enum` representing the physical material of a manuscript (e.g., `PARCHMENT`, `PAPYRUS`, `PAPER`).
+    *   **`Region`**: An `Enum` representing geographical areas where manuscripts are located (e.g., `ASIA_MINOR`, `EGYPT`, `LEVANT`).
+    *   **`Script`**: An `Enum` representing different script styles used in textual witnesses (e.g., `UNCIAL`, `MINUSCULE`).
+*   **Dataclasses:**
+    *   **`Manuscript`**: A dataclass representing a physical manuscript.
+        *   `manuscript_id` (str): Unique identifier.
+        *   `birth_tick` (int): Simulation tick when the manuscript is created.
+        *   `death_tick` (int): Simulation tick when the manuscript ceases to exist.
+        *   `material` (`Material`): Immutable material type.
+        *   `region` (`Region`): Current geographical region, mutable over time due to migration.
+        *   `location` (`Tuple[float, float]`): Precise (x,y) coordinates, mutable over time.
+    *   **`Witness`**: A dataclass representing the textual content associated with a `Manuscript`.
+        *   `witness_id` (str): Unique identifier for the textual content.
+        *   `manuscript_id` (str): Foreign key linking to its parent `Manuscript`.
+        *   `script` (`Script`): Immutable script style used.
+        *   `metadata` (`Dict[str, Any]`): Optional field for arbitrary additional data.
+*   **Registries:**
+    *   **`ManuscriptRegistry`**: Manages a collection of all `Manuscript` objects.
+        *   `add(manuscript)`: Adds a manuscript, enforcing `manuscript_id` uniqueness.
+        *   `get(manuscript_id)`: Retrieves a manuscript by ID.
+        *   Provides `__contains__`, `__len__`, and `items()` for collection management.
+    *   **`WitnessRegistry`**: Manages a collection of all `Witness` objects.
+        *   Requires a `ManuscriptRegistry` during initialization to validate `manuscript_id` references.
+        *   `add(witness)`: Adds a witness, ensuring `witness_id` uniqueness and that its `manuscript_id` refers to an existing manuscript.
+        *   `get(witness_id)`: Retrieves a witness by ID.
+        *   Provides `__contains__`, `__len__`, and `items()` for collection management.
+*   **`StateRegistry`**: A top-level dataclass that acts as a container for both `ManuscriptRegistry` and `WitnessRegistry`. It provides a centralized, consistent snapshot of all entities in the simulation without containing any simulation logic itself. The `WitnessRegistry` is initialized using the `ManuscriptRegistry` in `__post_init__`.
+
+This module is foundational for defining the entities and their relationships within the simulation, ensuring data integrity and providing structured access to the simulation's current state.
+
+### `src/pasim/core/tagged_string_constraints.py`
+
+This module serves as the authoritative source for defining the legal state space of values within a "tagged string," which represents the textual content of a witness. It centralizes the fundamental constraints for textual segments, ensuring consistency and validity across all parts of the simulation that create or modify tagged strings, especially mutation operators and factory functions.
+
+**Key Constants and Functions:**
+
+*   **`TAGGED_STRING_LENGTH` (int):** A constant defining the fixed length for every tagged string in the simulation (currently 100). This ensures all textual representations are uniformly sized.
+*   **`LEGAL_SEGMENT_VALUES` (NDArray[np.int16]):** A NumPy array explicitly listing all permissible integer values that a single segment within a tagged string can hold (currently `[1, 2, 3, 4, 5]`). This acts as the "alphabet" for the textual model.
+*   **`SegmentValue` (Type Alias):** An alias for `np.int16` for clarity in type hinting.
+*   **`is_valid_segment_value(value: SegmentValue) -> bool`:**
+    *   A simple predicate function that checks if a given integer `value` is present within `LEGAL_SEGMENT_VALUES`.
+*   **`validate_tagged_string(tagged_string: NDArray[np.int16]) -> None`:**
+    *   A comprehensive validation function for an entire `tagged_string` (NumPy array).
+    *   Performs multiple checks to ensure the string's integrity:
+        *   Confirms it's a NumPy array.
+        *   Verifies its length matches `TAGGED_STRING_LENGTH`.
+        *   Checks that its data type is integer-like.
+        *   Ensures that *all* values within the array are `is_valid_segment_value`.
+    *   Raises `TypeError` or `ValueError` if any validation fails. Intended as a safeguard after creation or modification.
+*   **`sample_alternative_value(current_value: SegmentValue, rng: np.random.Generator) -> SegmentValue`:**
+    *   A critical utility for mutation logic. It samples a *new*, legal segment value that is explicitly *different* from the `current_value`.
+    *   It achieves this by filtering `LEGAL_SEGMENT_VALUES` to exclude `current_value` and then randomly choosing from the remaining alternatives using the provided `rng` (ensuring deterministic selection).
+    *   Raises `ValueError` if `current_value` itself is not valid.
+
+This module is fundamental for maintaining the integrity and consistency of the textual data throughout the simulation, providing a robust foundation for modeling textual variation.
+
+### `src/pasim/core/transmission.py`
+
+This module defines the base rules for "base transmission" of textual content from one or more parent exemplars to a new copy. It focuses purely on the structural combination of source texts, deliberately excluding any considerations of scribal errors or mutations. This separation ensures a clean, deterministic base layer upon which more complex error models can be applied.
+
+**Key Concepts:**
+
+*   **Separation of Concerns:** Distinguishes the process of combining source texts from the process of introducing errors. This allows for isolated testing and clearer understanding of each stage.
+*   **Determinism:** All functions in this module are deterministic given their inputs, especially when a seeded `rng` is used for tie-breaking.
+
+**Key Functions:**
+
+*   **`copy_from_single_exemplar(parent_text: TaggedString) -> TaggedString`:**
+    *   **Purpose:** To simulate the most straightforward copying scenario: a perfect replication from a single source.
+    *   **Functionality:** Takes a `TaggedString` (NumPy array) as `parent_text` and returns a new, independent deep copy of it. This ensures that subsequent modifications (e.g., mutations) to the copy do not affect the original.
+    *   **Determinism:** Fully deterministic.
+*   **`majority_from_exemplars(parent_texts: List[TaggedString], rng: np.random.Generator) -> TaggedString`:**
+    *   **Purpose:** To combine textual content from multiple parent exemplars using a segment-wise majority voting mechanism. This models "contamination" or influence from multiple sources.
+    *   **Inputs:**
+        *   `parent_texts`: A list of `TaggedString` (NumPy arrays), representing the texts from multiple exemplars.
+        *   `rng`: A NumPy random number generator, used *only* for deterministically breaking ties when multiple values share the highest frequency in a segment.
+    *   **Functionality:**
+        *   Validates that at least two parent texts are provided and that all parent texts have consistent shapes and data types.
+        *   For each segment position (column) across all `parent_texts`:
+            *   It counts the occurrences of each unique value.
+            *   If there's a clear majority (single most common value), that value is selected for the new text.
+            *   If there's a tie for the most common value, `rng.choice()` is used to randomly (but deterministically, given `rng`'s state) select one of the tied values.
+        *   Constructs and returns a new `TaggedString` (NumPy array) containing the result of this majority voting.
+    *   **Determinism:** Deterministic given the inputs and `rng` state.
+
+This module is a foundational piece of the simulation, providing the mechanisms for how textual readings propagate and combine across generations of manuscripts before any scribal errors are introduced.
+
+### `src/pasim/execution/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `execution` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/execution/batch.py`
+
+This file is currently empty. It is intended for managing and running multiple simulations in batches, as described in `project_overview.md`. This would typically involve iterating through a set of configurations or seeds, orchestrating individual simulation runs, and potentially collecting their results.
+
+### `src/pasim/execution/parallel.py`
+
+This file is currently empty. It is intended for parallelizing simulation execution, as described in `project_overview.md`. This would likely involve using multiprocessing or threading to run multiple simulation instances concurrently, potentially leveraging the `RNGContext` to ensure independent and reproducible random number streams for each parallel process.
+
+### `src/pasim/execution/runner.py`
+
+This file is currently empty. It is intended to execute a single simulation run, acting as the primary orchestrator for a single instance of the `pasim` model. As described in `project_overview.md`, it would likely initialize the simulation state, configure parameters, and drive the main simulation loop by calling functions from the `core` module.
+
+### `src/pasim/io/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `io` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/io/aggregation.py`
+
+This file is currently empty. It is intended for aggregating results from multiple simulation runs, as described in `project_overview.md`. This would typically involve combining data from individual runs to produce summary statistics, averages, or other aggregated views.
+
+### `src/pasim/io/formats.py`
+
+This file is currently empty. It is intended for handling different data formats used for input or output in the simulation, as described in `project_overview.md`. This could include defining parsers for configuration files, serializers for simulation results, or adapters for various data storage types.
+
+### `src/pasim/io/output.py`
+
+This file is currently empty. It is intended for writing simulation results to various output destinations (e.g., files, databases), as described in `project_overview.md`. This would encompass functions for saving generated genealogies, textual data, and other simulation outputs.
+
+### `src/pasim/utils/__init__.py`
+
+This file is an empty `__init__.py` file, serving primarily to mark the `utils` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/utils/logging.py`
+
+This file is currently empty. It is intended for implementing logging mechanisms within the simulation framework, as described in `project_overview.md`. This would typically involve configuring loggers, handlers, and formatters to capture and output various levels of information, warnings, and errors during simulation execution.
+
+### `src/pasim/utils/timing.py`
+
+This file is currently empty. It is intended for performance measurement and timing utilities within the simulation framework, as described in `project_overview.md`. This would typically involve functions or decorators for measuring execution time of various simulation components.
