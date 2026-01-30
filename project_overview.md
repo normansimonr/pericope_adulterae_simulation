@@ -105,6 +105,25 @@ The `pasim` framework will facilitate the following general workflow for researc
 
 This setup enables researchers to explore various hypotheses about the textual history of the Pericope Adulterae by adjusting simulation parameters and observing the emergent textual traditions.
 
+## Testing
+
+### `tests/test_historical_dynamics.py`
+
+This test module ensures that the historical and temporal systems of the simulation behave correctly and reproducibly. It contains a suite of tests that validate the determinism, correctness, and isolation of the various dynamic components of the simulation engine.
+
+These tests guarantee that historical dynamics are deterministic, parameter-driven, and isolated from core mechanics. They verify that scheduled events (like persecutions) and environmental transitions (like material or script usage) behave correctly and reproducibly.
+
+-   **Persecution Correctness Test**: Verifies that a persecution event correctly removes a specified proportion of manuscripts from the alive set within a targeted region, without affecting manuscripts in other regions or the integrity of the genealogy graph.
+-   **Persecution Determinism Test**: Ensures that running a simulation with a persecution event multiple times with the same seed produces the exact same set of destroyed manuscripts, and that different seeds lead to different outcomes.
+-   **Material Transition Test**: Validates that newly spawned manuscripts are assigned materials according to the time-dependent probability distribution defined in the `MaterialTransitionManager`. It asserts that manuscripts created before and after a transition point have the expected materials and that existing manuscripts' materials are not altered.
+-   **Script Transition Test**: Similar to the material transition test, this verifies that newly created witness instances are assigned scripts (e.g., uncial, minuscule) based on the active schedule in the `ScriptTransitionManager`.
+-   **Demand Schedule Test**: Confirms that the simulation spawns new manuscripts to meet the minimum numbers specified in the regional demand schedule and that the logic for retrieving demand correctly falls back to the last known value for ticks not explicitly defined.
+-   **Migration Determinism Test**: Guarantees that the stochastic process of manuscript migration (both between and within regions) is fully deterministic for a given seed, producing identical migration histories across identical runs.
+-   **Event Ordering Stability Test**: Checks that the `HistoricalEventManager` correctly processes events based on their `start_tick`, regardless of their order in the configuration file, ensuring stable and predictable outcomes.
+-   **No Side-Effect Tests**: Verifies that manager components (`HistoricalEventManager`, `MaterialTransitionManager`, `ScriptTransitionManager`) do not cause unintended side effects, such as modifying the simulation's tick or state, when they are called.
+
+These tests are crucial for ensuring the scientific validity and reproducibility of the simulation, providing confidence that the results are a direct consequence of the configured parameters and not artifacts of implementation errors.
+
 ## Detailed Module and File Summaries
 
 ### `src/pasim/__init__.py`
