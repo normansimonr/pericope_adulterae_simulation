@@ -43,13 +43,11 @@ Explicit Exclusions:
 """
 import itertools
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Dict, Any, MutableSet, Deque, Optional
+from typing import Dict, Any, Deque, Optional
 
-import networkx as nx
 from numpy.random import Generator as RNG
 
-from pasim.core.genealogy import create_empty_genealogy, add_root_node, add_child_node
+from pasim.core.genealogy import add_root_node, add_child_node
 from pasim.core.state import StateRegistry, Manuscript, Witness, Region, Material
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.exemplar_selection import select_exemplars
@@ -58,37 +56,7 @@ from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.config.schema import SimulationConfig, get_demand_for_tick
-
-
-@dataclass
-class GenerationState:
-    """Encapsulates the complete state for a genealogy generation run."""
-    tick: int
-    graph: nx.DiGraph
-    registries: StateRegistry
-    alive_manuscripts: MutableSet[str]
-    manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
-    # Counters for generating unique IDs
-    manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
-    witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
-    witness_instance_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
-
-
-def initialise_generation_state() -> GenerationState:
-    """Creates and returns an empty genealogy generation state.
-
-    This function initialises the state for a new simulation run, setting the
-    tick to zero and preparing empty data structures.
-
-    Returns:
-        GenerationState: An object representing the pristine initial state.
-    """
-    return GenerationState(
-        tick=0,
-        graph=create_empty_genealogy(),
-        registries=StateRegistry(),
-        alive_manuscripts=set(),
-    )
+from pasim.core.simulation_state import GenerationState, initialise_generation_state
 
 
 def handle_deaths(state: GenerationState) -> GenerationState:

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import math
 
-from .state import GenerationState
+from .simulation_state import GenerationState
 
 
 @dataclass
@@ -119,10 +119,9 @@ class PersecutionEvent(HistoricalEvent):
             return
 
         # 1. Identify eligible manuscripts
-        manuscript_registry = state.registries.manuscripts
         eligible_manuscripts = [
-            ms_id for ms_id in state.alive_manuscripts
-            if self.regions is None or manuscript_registry.get(ms_id).region in self.regions
+            ms for ms in state.alive_manuscripts
+            if self.regions is None or ms.region.name in self.regions
         ]
 
         if not eligible_manuscripts:
@@ -134,8 +133,10 @@ class PersecutionEvent(HistoricalEvent):
             return
 
         # 3. Randomly choose victims
+        # Convert to numpy array for efficient choice
+        eligible_array = np.array(eligible_manuscripts, dtype=object)
         victims = rng.choice(
-            eligible_manuscripts,
+            eligible_array,
             size=n_to_destroy,
             replace=False
         )

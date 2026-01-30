@@ -9,13 +9,12 @@ import pytest
 from typing import Dict, Any
 
 from pasim.core.genealogy_generator import (
-    GenerationState,
-    initialise_generation_state,
     handle_deaths,
     handle_migration,
     _spawn_new_manuscripts_from_demand,
     run_genealogy_generator,
 )
+from pasim.core.simulation_state import GenerationState, initialise_generation_state
 from pasim.core.historical_events import (
     HistoricalEventManager,
     PersecutionEvent,
