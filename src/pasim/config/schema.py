@@ -27,9 +27,9 @@ are configured separately:
     neither instantaneous shocks nor probabilistic environments but are a direct
     input to the simulation's core spawning logic.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, RootModel, model_validator, field_validator
 
 from pasim.core.state import Region, Material, Script
 
@@ -41,7 +41,8 @@ class PersecutionEventConfig(BaseModel):
     regions: List[str]
     kill_proportion: float = Field(..., ge=0.0, le=1.0)
 
-    @validator('regions')
+    @field_validator('regions')
+    @classmethod
     def validate_regions(cls, v):
         """Ensures all specified regions are valid."""
         valid_regions = {r.value for r in Region}
@@ -50,21 +51,21 @@ class PersecutionEventConfig(BaseModel):
                 raise ValueError(f"Invalid region '{region_name}'. Must be one of {valid_regions}")
         return v
 
-    @root_validator
-    def validate_tick_ordering(cls, values):
+    @model_validator(mode='after')
+    def validate_tick_ordering(self):
         """Ensures start_tick is not after end_tick."""
-        start, end = values.get('start_tick'), values.get('end_tick')
-        if end is not None and start > end:
+        if self.end_tick is not None and self.start_tick > self.end_tick:
             raise ValueError("start_tick cannot be after end_tick")
-        return values
+        return self
 
 class MaterialTransitionConfig(BaseModel):
     """Configuration for a material transition point."""
     start_tick: int = Field(..., ge=0)
     distribution: Dict[str, float]
 
-    @validator('distribution')
-    def validate_distribution(cls, v):
+    @field_validator('distribution')
+    @classmethod
+    def validate_distribution_materials(cls, v):
         """Validates material names and ensures probabilities sum to 1."""
         valid_materials = {m.value for m in Material}
         total_prob = 0.0
@@ -84,8 +85,9 @@ class ScriptTransitionConfig(BaseModel):
     start_tick: int = Field(..., ge=0)
     distribution: Dict[str, float]
 
-    @validator('distribution')
-    def validate_distribution(cls, v):
+    @field_validator('distribution')
+    @classmethod
+    def validate_distribution_scripts(cls, v):
         """Validates script names and ensures probabilities sum to 1."""
         valid_scripts = {s.value for s in Script}
         total_prob = 0.0
@@ -100,15 +102,14 @@ class ScriptTransitionConfig(BaseModel):
             raise ValueError(f"Probabilities must sum to 1.0, but got {total_prob}")
         return v
 
-class DemandScheduleConfig(BaseModel):
+class DemandScheduleConfig(RootModel[Dict[int, Dict[str, int]]]):
     """Configuration for the demand schedule."""
-    __root__: Dict[int, Dict[str, int]]
 
-    @validator('__root__')
-    def validate_demand_schedule(cls, v):
+    @model_validator(mode='after')
+    def validate_demand_schedule(self):
         """Validates the demand schedule."""
         valid_regions = {r.value for r in Region}
-        for tick, demands in v.items():
+        for tick, demands in self.root.items():
             if not isinstance(tick, int) or tick < 0:
                 raise ValueError(f"Invalid tick '{tick}' in demand schedule. Must be a non-negative integer.")
             for region_name, count in demands.items():
@@ -116,14 +117,14 @@ class DemandScheduleConfig(BaseModel):
                     raise ValueError(f"Invalid region '{region_name}' in demand schedule at tick {tick}. Must be one of {valid_regions}")
                 if not isinstance(count, int) or count < 0:
                     raise ValueError(f"Invalid demand count '{count}' for region '{region_name}' at tick {tick}. Must be a non-negative integer.")
-        return v
+        return self
 
 class SimulationConfig(BaseModel):
     """Root model for the entire simulation configuration."""
     total_ticks: int = Field(..., ge=1)
     p_region_migration: float = Field(0.0, ge=0.0, le=1.0)
     p_internal_relocation: float = Field(0.0, ge=0.0, le=1.0)
-    reputation_distribution: list = Field(...)
+    reputation_distribution: List[float] = Field(..., min_length=5, max_length=5) # Assuming a 5-point distribution
     death_ticks: List[int]
 
     persecutions: List[PersecutionEventConfig] = []
@@ -131,32 +132,40 @@ class SimulationConfig(BaseModel):
     script_transitions: List[ScriptTransitionConfig] = []
     demand_schedule: DemandScheduleConfig
 
-    @validator('material_transitions', 'script_transitions')
+    @field_validator('material_transitions', 'script_transitions')
+    @classmethod
     def validate_start_ticks_are_increasing(cls, v):
         """Ensures start_ticks in transition schedules are strictly increasing."""
         for i in range(len(v) - 1):
             if v[i].start_tick >= v[i+1].start_tick:
                 raise ValueError("start_tick values in transition schedules must be strictly increasing.")
         return v
+    
+    @field_validator('reputation_distribution')
+    @classmethod
+    def validate_reputation_distribution_sum_to_one(cls, v):
+        if not abs(sum(v) - 1.0) < 1e-9:
+            raise ValueError(f"Reputation distribution probabilities must sum to 1.0, but got {sum(v)}")
+        return v
 
 def get_persecution_events(params: dict) -> List[dict]:
     """Returns the validated persecution events."""
-    return [p.dict() for p in SimulationConfig(**params).persecutions]
+    return [p.model_dump() for p in SimulationConfig(**params).persecutions]
 
 def get_material_schedule(params: dict) -> List[dict]:
     """Returns the validated material transition schedule."""
-    return [m.dict() for m in SimulationConfig(**params).material_transitions]
+    return [m.model_dump() for m in SimulationConfig(**params).material_transitions]
 
 def get_script_schedule(params: dict) -> List[dict]:
     """Returns the validated script transition schedule."""
-    return [s.dict() for s in SimulationConfig(**params).script_transitions]
+    return [s.model_dump() for s in SimulationConfig(**params).script_transitions]
 
 def get_demand_for_tick(params: dict, tick: int) -> Dict[str, int]:
     """
     Returns the demand for a specific tick, using the last known value
     if the tick is not explicitly defined.
     """
-    schedule = SimulationConfig(**params).demand_schedule.__root__
+    schedule = SimulationConfig(**params).demand_schedule.root
     
     if tick in schedule:
         return schedule[tick]

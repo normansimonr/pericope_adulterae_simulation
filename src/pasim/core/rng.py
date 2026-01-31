@@ -71,4 +71,4 @@ class RNGContext:
             A list containing `n` independent NumPy random number generators.
         """
         child_sequences = self._root_sequence.spawn(n)
-        return [np.random.Generator(seq) for seq in child_sequences]
+        return [np.random.default_rng(seq) for seq in child_sequences]

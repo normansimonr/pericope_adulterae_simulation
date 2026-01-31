@@ -80,7 +80,7 @@ class HistoricalEvent:
         return tick == self.start_tick
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PersecutionEvent(HistoricalEvent):
     """
     A historical event that models persecution, destroying a fraction of manuscripts.
@@ -119,30 +119,30 @@ class PersecutionEvent(HistoricalEvent):
             return
 
         # 1. Identify eligible manuscripts
-        eligible_manuscripts = [
-            ms for ms in state.alive_manuscripts
-            if self.regions is None or ms.region.name in self.regions
-        ]
+        eligible_manuscript_ids = []
+        for ms_id in state.alive_manuscripts:
+            ms_obj = state.registries.manuscripts.get(ms_id)
+            if self.regions is None or ms_obj.region.name in self.regions:
+                eligible_manuscript_ids.append(ms_id)
 
-        if not eligible_manuscripts:
+        if not eligible_manuscript_ids:
             return
 
         # 2. Determine number to destroy
-        n_to_destroy = math.floor(self.kill_proportion * len(eligible_manuscripts))
+        n_to_destroy = math.floor(self.kill_proportion * len(eligible_manuscript_ids))
         if n_to_destroy == 0:
             return
 
-        # 3. Randomly choose victims
-        # Convert to numpy array for efficient choice
-        eligible_array = np.array(eligible_manuscripts, dtype=object)
-        victims = rng.choice(
+        # 3. Randomly choose victims (IDs)
+        eligible_array = np.array(list(eligible_manuscript_ids), dtype=object)
+        victims_ids = rng.choice(
             eligible_array,
             size=n_to_destroy,
             replace=False
         )
 
         # 4. Kill them (remove from alive set)
-        state.alive_manuscripts.difference_update(victims)
+        state.alive_manuscripts.difference_update(victims_ids)
 
 
 def create_event_from_config(config: Dict[str, Any]) -> HistoricalEvent:

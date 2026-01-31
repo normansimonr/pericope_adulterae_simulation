@@ -44,6 +44,7 @@ Explicit Exclusions:
 import itertools
 from collections import deque
 from typing import Dict, Any, Deque, Optional
+import networkx as nx # Added import for networkx
 
 from numpy.random import Generator as RNG
 
@@ -57,6 +58,7 @@ from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.config.schema import SimulationConfig, get_demand_for_tick
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
+
 
 
 def handle_deaths(state: GenerationState) -> GenerationState:
