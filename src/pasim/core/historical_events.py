@@ -173,7 +173,7 @@ class HistoricalEventManager:
             event_configs: A list of configuration dictionaries, each defining
                            a historical event.
         """
-        events = [create_event_from_config(cfg) for cfg in event_configs or []]
+        events = [create_event_from_config(cfg.copy()) for cfg in event_configs or []]
         
         self._events = sorted(
             events,
