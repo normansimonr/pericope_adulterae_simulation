@@ -7,6 +7,7 @@ and reproducibly.
 import numpy as np
 import pytest
 from typing import Dict, Any
+from collections import deque
 
 from pasim.core.genealogy_generator import (
     handle_deaths,
@@ -211,14 +212,14 @@ def test_material_transition():
         "total_ticks": 10,
         "p_region_migration": 0.0,
         "p_internal_relocation": 0.0,
-        "reputation_distribution": [0.2, 0.2, 0.2, 0.2, 0.2], # Dummy 5-point distribution
+        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2}, # Dummy 5-point distribution
         "death_ticks": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109], # Sufficient number
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
         "demand_schedule": { # Use RootModel's direct structure
-            0: {"EGYPT": 2},
-            6: {"EGYPT": 3}
+            0: {"Egypt": 2},
+            6: {"Egypt": 3}
         }
     }
     dummy_simulation_config = SimulationConfig(**dummy_config_data)
@@ -251,7 +252,7 @@ def test_material_transition():
     )
 
     # 4. Assertions
-    manuscripts = list(state.registry.manuscripts.items())
+    manuscripts = list(state.registries.manuscripts.items())
     
     # Initial manuscript is unchanged
     assert manuscripts[0][1].material == Material.PARCHMENT
@@ -294,14 +295,14 @@ def test_script_transition():
         "total_ticks": 10,
         "p_region_migration": 0.0,
         "p_internal_relocation": 0.0,
-        "reputation_distribution": [0.2, 0.2, 0.2, 0.2, 0.2], # Dummy 5-point distribution
+        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2}, # Dummy 5-point distribution
         "death_ticks": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109], # Sufficient number
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
         "demand_schedule": { # Use RootModel's direct structure
-            0: {"EGYPT": 2},
-            6: {"EGYPT": 3}
+            0: {"Egypt": 2},
+            6: {"Egypt": 3}
         }
     }
     dummy_simulation_config = SimulationConfig(**dummy_config_data)
@@ -334,7 +335,7 @@ def test_script_transition():
     )
 
     # 4. Assertions
-    witnesses = list(state.registry.witnesses.items())
+    witnesses = list(state.registries.witnesses.items())
     
     # Initial witness is unchanged
     assert witnesses[0][1].script == Script.UNCIAL
@@ -351,8 +352,8 @@ def test_demand_schedule():
     """Verify demand schedule correctly drives spawning and handles missing ticks."""
     # 1. Define demand schedule data and managers
     demand_schedule_data = {
-        0: {"EGYPT": 5, "ASIA_MINOR": 3},
-        10: {"EGYPT": 8},
+        0: {"Egypt": 5, "Asia Minor": 3},
+        10: {"Egypt": 8},
     }
     material_schedule_config = [{"start_tick": 0, "distribution": {"parchment": 1.0}}]
     material_manager = MaterialTransitionManager(material_schedule_config)
@@ -364,7 +365,7 @@ def test_demand_schedule():
         "total_ticks": 20,
         "p_region_migration": 0.0,
         "p_internal_relocation": 0.0,
-        "reputation_distribution": [0.2, 0.2, 0.2, 0.2, 0.2], # Example 5-point distribution
+        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2}, # Example 5-point distribution
         "death_ticks": [100] * 20, # Example death ticks
         "persecutions": [],
         "material_transitions": material_schedule_config,
@@ -373,10 +374,10 @@ def test_demand_schedule():
     }
 
     # 2. Test last-known-value retrieval
-    assert get_demand_for_tick(dummy_full_params, 0) == {"EGYPT": 5, "ASIA_MINOR": 3}
-    assert get_demand_for_tick(dummy_full_params, 5) == {"EGYPT": 5, "ASIA_MINOR": 3}  # Falls back to tick 0
-    assert get_demand_for_tick(dummy_full_params, 10) == {"EGYPT": 8}
-    assert get_demand_for_tick(dummy_full_params, 15) == {"EGYPT": 8}  # Falls back to tick 10
+    assert get_demand_for_tick(dummy_full_params, 0) == {Region.EGYPT: 5, Region.ASIA_MINOR: 3}
+    assert get_demand_for_tick(dummy_full_params, 5) == {Region.EGYPT: 5, Region.ASIA_MINOR: 3}  # Falls back to tick 0
+    assert get_demand_for_tick(dummy_full_params, 10) == {Region.EGYPT: 8}
+    assert get_demand_for_tick(dummy_full_params, 15) == {Region.EGYPT: 8}  # Falls back to tick 10
 
     # 3. Test spawning to meet demand
     rng_context = RNGContext(seed=1)

@@ -122,7 +122,7 @@ class PersecutionEvent(HistoricalEvent):
         eligible_manuscript_ids = []
         for ms_id in state.alive_manuscripts:
             ms_obj = state.registries.manuscripts.get(ms_id)
-            if self.regions is None or ms_obj.region.name in self.regions:
+            if self.regions is None or ms_obj.region.value in self.regions:
                 eligible_manuscript_ids.append(ms_id)
 
         if not eligible_manuscript_ids:

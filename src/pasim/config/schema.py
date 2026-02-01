@@ -102,21 +102,48 @@ class ScriptTransitionConfig(BaseModel):
             raise ValueError(f"Probabilities must sum to 1.0, but got {total_prob}")
         return v
 
-class DemandScheduleConfig(RootModel[Dict[int, Dict[str, int]]]):
+class DemandScheduleConfig(RootModel[Dict[int, Dict[Region, int]]]):
     """Configuration for the demand schedule."""
+
+    @model_validator(mode='before')
+    @classmethod
+    def convert_region_strings_to_enums(cls, raw_data: Any) -> Any:
+        """
+        Converts string keys in the nested demand dictionaries to Region enum members.
+        This runs *before* Pydantic's default validation, allowing the rest of the
+        validation chain to operate on Region enums.
+        """
+        if not isinstance(raw_data, dict):
+            return raw_data # Let Pydantic handle basic type validation
+
+        converted_data = {}
+        for tick, demands_by_string_region in raw_data.items():
+            if not isinstance(demands_by_string_region, dict):
+                # Pydantic will raise error later if not dict, but for cleaner error message:
+                raise ValueError(f"Demand value for tick {tick} must be a dictionary, got {type(demands_by_string_region)}")
+            
+            converted_demands = {}
+            for region_name, count in demands_by_string_region.items():
+                try:
+                    region_enum = Region(region_name)
+                except ValueError:
+                    raise ValueError(f"Invalid region '{region_name}' in demand schedule at tick {tick}. Must be one of {[r.value for r in Region]}")
+                converted_demands[region_enum] = count
+            converted_data[tick] = converted_demands
+        return converted_data
+
 
     @model_validator(mode='after')
     def validate_demand_schedule(self):
-        """Validates the demand schedule."""
-        valid_regions = {r.value for r in Region}
+        """Validates the demand schedule after region strings have been converted to enums."""
         for tick, demands in self.root.items():
             if not isinstance(tick, int) or tick < 0:
                 raise ValueError(f"Invalid tick '{tick}' in demand schedule. Must be a non-negative integer.")
-            for region_name, count in demands.items():
-                if region_name not in valid_regions:
-                    raise ValueError(f"Invalid region '{region_name}' in demand schedule at tick {tick}. Must be one of {valid_regions}")
+            for region_enum, count in demands.items(): # Now region_enum is already a Region object
+                if not isinstance(region_enum, Region): # Should not happen if 'before' validator works
+                    raise TypeError(f"Region key for tick {tick} is not a Region enum, got {type(region_enum)}")
                 if not isinstance(count, int) or count < 0:
-                    raise ValueError(f"Invalid demand count '{count}' for region '{region_name}' at tick {tick}. Must be a non-negative integer.")
+                    raise ValueError(f"Invalid demand count '{count}' for region '{region_enum.value}' at tick {tick}. Must be a non-negative integer.")
         return self
 
 class SimulationConfig(BaseModel):
@@ -124,7 +151,7 @@ class SimulationConfig(BaseModel):
     total_ticks: int = Field(..., ge=1)
     p_region_migration: float = Field(0.0, ge=0.0, le=1.0)
     p_internal_relocation: float = Field(0.0, ge=0.0, le=1.0)
-    reputation_distribution: List[float] = Field(..., min_length=5, max_length=5) # Assuming a 5-point distribution
+    reputation_distribution: Dict[int, float]
     death_ticks: List[int]
 
     persecutions: List[PersecutionEventConfig] = []
@@ -143,9 +170,23 @@ class SimulationConfig(BaseModel):
     
     @field_validator('reputation_distribution')
     @classmethod
-    def validate_reputation_distribution_sum_to_one(cls, v):
-        if not abs(sum(v) - 1.0) < 1e-9:
-            raise ValueError(f"Reputation distribution probabilities must sum to 1.0, but got {sum(v)}")
+    def validate_reputation_distribution(cls, v: Dict[int, float]):
+        """
+        Validates the reputation distribution: keys must be 1-5, values must be non-negative,
+        and probabilities must sum to 1.0.
+        """
+        expected_keys = {1, 2, 3, 4, 5}
+        if set(v.keys()) != expected_keys:
+            raise ValueError(f"Reputation distribution keys must be 1-5, but got {set(v.keys())}")
+        
+        total_prob = 0.0
+        for rep_score, prob in v.items():
+            if not (0.0 <= prob <= 1.0):
+                raise ValueError(f"Reputation probability for score {rep_score} must be between 0.0 and 1.0, got {prob}")
+            total_prob += prob
+        
+        if not abs(total_prob - 1.0) < 1e-9:
+            raise ValueError(f"Reputation distribution probabilities must sum to 1.0, but got {total_prob}")
         return v
 
 def get_persecution_events(params: dict) -> List[dict]:
@@ -160,7 +201,7 @@ def get_script_schedule(params: dict) -> List[dict]:
     """Returns the validated script transition schedule."""
     return [s.model_dump() for s in SimulationConfig(**params).script_transitions]
 
-def get_demand_for_tick(params: dict, tick: int) -> Dict[str, int]:
+def get_demand_for_tick(params: dict, tick: int) -> Dict[Region, int]:
     """
     Returns the demand for a specific tick, using the last known value
     if the tick is not explicitly defined.
