@@ -67,6 +67,16 @@ The `run_single` function returns a `SimulationResult` dataclass object, which c
 -   `config` (`SimulationConfig`): The validated Pydantic configuration object used for the run.
 -   `seed` (int): The seed used for the run.
 
+## Inspection
+
+After a simulation has been run via `run_single`, the resulting `SimulationResult` object can be passed to a suite of read-only helper functions in the `pasim.analysis.inspection` module. These functions provide convenient, high-level views of the simulation's state for debugging and analysis.
+
+-   **`manuscript_table(state)`**: Returns a list of dictionaries, each representing a manuscript with its complete properties, including its alive/dead status, script, and reputation.
+-   **`node_table(state)`**: Returns a list of dictionaries, each representing a node (witness instance) in the genealogy graph, including its ID, associated IDs, and its parent/child relationships.
+-   **`genealogy_edges(state)`**: Returns a simple list of `(parent, child)` tuples representing the edges of the genealogy graph.
+-   **`lineage_texts(state, leaf_instance_id)`**: Traces the ancestry of a given leaf node back to its root, returning the sequence of texts in chronological order. *(Note: As textual content is not yet stored, this currently returns a list of `None` placeholders).*
+-   **`to_networkx_copy(state)`**: Returns a full, deep copy of the `networkx.DiGraph` object, allowing for safe, independent analysis and manipulation.
+
 ## Architecture and Structure
 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
@@ -161,6 +171,10 @@ This file is an empty `__init__.py` file, serving primarily to mark the `pasim` 
 ### `src/pasim/analysis/__init__.py`
 
 This file is an empty `__init__.py` file, serving primarily to mark the `analysis` directory as a Python subpackage within `pasim`. It does not contain any functional code or exposed modules.
+
+### `src/pasim/analysis/inspection.py`
+
+This module provides a suite of read-only helper functions for inspecting the state of a completed simulation run. It includes utilities for generating tabular views of manuscripts and nodes, extracting the genealogy graph structure, and tracing textual lineages. These functions are pure and do not modify the input state.
 
 ### `src/pasim/analysis/metrics.py`
 

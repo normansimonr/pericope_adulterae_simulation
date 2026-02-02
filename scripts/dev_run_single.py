@@ -9,6 +9,12 @@ pathway is working correctly after making changes to the simulation core or
 configuration.
 """
 from pasim.execution.runner import run_single
+from pasim.analysis.inspection import (
+    manuscript_table,
+    genealogy_edges,
+    node_table,
+    lineage_texts,
+)
 
 # Execute the baseline experiment with a fixed seed for reproducibility
 result = run_single("experiments/exp001_baseline/params.yaml", seed=42)
@@ -28,3 +34,27 @@ print("Telemetry (last 3 ticks):")
 for record in result.state.telemetry[-3:]:
     print(f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total")
 print("--- End of Summary ---")
+
+
+print("\n--- Manuscripts ---")
+for row in manuscript_table(result.state):
+    print(row)
+
+print("\n--- Genealogy Edges ---")
+print(genealogy_edges(result.state))
+
+print("\n--- Nodes ---")
+for row in node_table(result.state):
+    print(row)
+
+# Pick a leaf node automatically to test lineage tracing
+leaf_nodes = [n for n in result.graph.nodes if result.graph.out_degree(n) == 0]
+if leaf_nodes:
+    leaf = leaf_nodes[0]
+    print(f"\n--- Lineage trace for leaf node: {leaf} ---")
+    texts = lineage_texts(result.state, leaf)
+    print(f"Lineage length: {len(texts)}")
+    # When text is implemented, we can print the actual texts
+    # print("Texts (root to leaf):", texts)
+else:
+    print("\n--- No leaf nodes found for lineage trace. ---")
