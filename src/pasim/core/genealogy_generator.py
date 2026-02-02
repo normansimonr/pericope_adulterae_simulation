@@ -312,10 +312,17 @@ def advance_tick(
         state, demand_today, death_ticks, params, rng, material_transition_manager, script_transition_manager
     )
 
+    # 5. Record telemetry
+    state.telemetry.append({
+        "tick": state.tick,
+        "alive_manuscripts": len(state.alive_manuscripts),
+        "total_manuscripts": len(state.registries.manuscripts),
+    })
+
     return state
 
 
-def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
+def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationState:
     """High-level orchestration entry point for genealogy generation.
 
     This function drives the entire deterministic, tick-based process of
@@ -371,4 +378,4 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> nx.DiGraph:
             script_transition_manager=script_transition_manager,
         )
 
-    return state.graph
+    return state

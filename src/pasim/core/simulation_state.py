@@ -26,6 +26,7 @@ class GenerationState:
     manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
     witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
     witness_instance_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+    telemetry: list = field(default_factory=list)
 
 
 def initialise_generation_state() -> GenerationState:

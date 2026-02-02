@@ -12,12 +12,16 @@ ENV/
 env.bak/
 venv.bak/
 
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
 # Data
 data/
 *.csv
 *.json
 *.xml
-*.yaml
 
 # Other
 .DS_Store

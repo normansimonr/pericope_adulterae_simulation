@@ -173,13 +173,13 @@ This module defines the comprehensive, hierarchical configuration schema for `pa
     *   `start_tick`: The tick at which this distribution becomes active.
     *   `distribution`: A dictionary mapping `Script` names to their probabilities, validated to sum to 1.0 and use valid `Script` enum values.
 *   **`DemandScheduleConfig`:** Defines the demand for new manuscripts across different regions over time.
-    *   `__root__`: A dictionary where keys are ticks (integers) and values are dictionaries mapping `Region` names to the integer demand count for that tick.
+    *   `__root__`: A dictionary where keys are ticks (integers) and values are dictionaries mapping `Region` enum objects to the integer demand count for that tick. The schema validator automatically converts string region names from the config file into `Region` enums.
     *   Includes validators for tick values, region names, and demand counts.
 *   **`SimulationConfig`:** The root model encompassing all simulation parameters.
     *   `total_ticks`: The total duration of the simulation.
     *   `p_region_migration`: Probability of a manuscript migrating to a different region.
     *   `p_internal_relocation`: Probability of a manuscript relocating within its current region.
-    *   `reputation_distribution`: A list representing the distribution of reputation scores.
+    *   `reputation_distribution`: A dictionary mapping reputation scores (1-5) to their probabilities.
     *   `death_ticks`: A list of pre-generated death ticks for new manuscripts.
     *   Includes lists of `PersecutionEventConfig`, `MaterialTransitionConfig`, and `ScriptTransitionConfig` objects.
     *   `demand_schedule`: An instance of `DemandScheduleConfig`.
@@ -381,10 +381,9 @@ This module defines the policy layer for translating an abstract "reputation" sc
     *   It retrieves the corresponding `expected_proportion` of segments that should mutate for that reputation level.
     *   Performs validation to ensure the input `reputation` is valid, exists in the mapping, and the retrieved proportion is between 0.0 and 1.0.
     *   The function is fully deterministic.
-*   **`sample_reputation(rng: np.random.Generator, reputation_distribution: Optional[Dict[int, float]] = None) -> int`:**
+*   **`sample_reputation(rng: np.random.Generator, reputation_distribution: Dict[int, float]) -> int`:**
     *   Allows for probabilistic assignment of reputation scores to new witness instances.
-    *   Takes a `rng` (NumPy random number generator) for deterministic sampling and an optional `reputation_distribution` dictionary. If `reputation_distribution` is `None`, it defaults to `DEFAULT_REPUTATION_MAPPING` keys with calculated probabilities to sum to 1.
-    *   Validates the provided `reputation_distribution` to ensure it has keys 1-5, non-negative probabilities, and probabilities summing to 1.0.
+    *   Takes a `rng` (NumPy random number generator) for deterministic sampling and a `reputation_distribution` dictionary, which is expected to be pre-validated by the `SimulationConfig`.
     *   Uses `rng.choice` to sample an integer reputation score (1-5) based on the specified probabilities.
 
 This module plays a critical role in modeling the impact of textual authority on copying fidelity, allowing researchers to explore how perceived quality influences the introduction of textual variations.
