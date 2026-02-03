@@ -14,6 +14,7 @@ deterministic intensity level that mutation operators can then consume.
 """
 
 from typing import Dict, Optional
+
 import numpy as np
 
 # Define the default mapping from reputation level to expected mutation proportion.

@@ -5,8 +5,10 @@ are designed for developers to debug, verify, and understand the simulation's
 output without modifying the core logic or state.
 """
 
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Tuple
+
 import networkx as nx
+
 from pasim.core.simulation_state import GenerationState
 
 # A type alias for clarity

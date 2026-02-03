@@ -28,11 +28,11 @@ are configured separately:
     input to the simulation's core spawning logic.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, RootModel, model_validator, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
-from pasim.core.state import Region, Material, Script
+from pasim.core.state import Material, Region, Script
 
 
 class PersecutionEventConfig(BaseModel):

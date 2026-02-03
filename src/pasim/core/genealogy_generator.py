@@ -42,22 +42,22 @@ Explicit Exclusions:
 """
 
 from collections import deque
-from typing import Dict, Any, Deque, Optional, List
+from typing import Any, Deque, Dict, List, Optional
 
 from numpy.random import Generator as RNG
 
-from pasim.core.genealogy import add_root_node, add_child_node
-from pasim.core.state import Manuscript, Witness, Region
-from pasim.core.spatial import generate_random_coordinates
+from pasim.config.schema import SimulationConfig, get_demand_for_tick
 from pasim.core.exemplar_selection import select_exemplars
-from pasim.core.reputation import sample_reputation
+from pasim.core.genealogy import add_child_node, add_root_node
 from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.material_transition_manager import MaterialTransitionManager
-from pasim.core.script_transition_manager import ScriptTransitionManager
-from pasim.config.schema import SimulationConfig, get_demand_for_tick
-from pasim.core.simulation_state import GenerationState, initialise_generation_state
-from pasim.core.text_initialisation import make_initial_text
+from pasim.core.reputation import sample_reputation
 from pasim.core.scribal_rules import apply_scribal_rule
+from pasim.core.script_transition_manager import ScriptTransitionManager
+from pasim.core.simulation_state import GenerationState, initialise_generation_state
+from pasim.core.spatial import generate_random_coordinates
+from pasim.core.state import Manuscript, Region, Witness
+from pasim.core.text_initialisation import make_initial_text
 
 
 def handle_deaths(state: GenerationState) -> GenerationState:
@@ -126,7 +126,7 @@ def handle_migration(
             other_regions = [r for r in Region if r != manuscript.region]
             if other_regions:
                 new_region_value = rng.choice([r.value for r in other_regions])
-                new_region = Region(new_region_value) # Convert back to Enum
+                new_region = Region(new_region_value)  # Convert back to Enum
                 manuscript.region = new_region
                 manuscript.location = generate_random_coordinates(new_region, rng)
             continue  # A manuscript can only have one migration event per tick

@@ -21,3 +21,6 @@ build-backend = "setuptools.build_meta"
 test = [
     "pytest",
 ]
+
+[tool.isort]
+profile = "black"

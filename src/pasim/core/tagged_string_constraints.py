@@ -15,6 +15,8 @@ simulation. All higher-level logic that creates or modifies tagged strings must
 use the primitives in this module to validate their operations.
 """
 
+from typing import TypeAlias
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -26,7 +28,7 @@ from pasim.config.schema import SimulationConfig
 LEGAL_SEGMENT_VALUES: NDArray[np.int16] = np.array([1, 2, 3, 4, 5], dtype=np.int16)
 
 # For type hinting clarity.
-SegmentValue = np.int16
+SegmentValue: TypeAlias = np.int16
 
 
 def is_valid_segment_value(value: SegmentValue) -> bool:

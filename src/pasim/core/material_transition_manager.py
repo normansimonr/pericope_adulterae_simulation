@@ -26,7 +26,8 @@ The manager loads a schedule and, for any given tick, determines the active
 material distribution to sample from.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 import numpy as np
 
 from .state import Material

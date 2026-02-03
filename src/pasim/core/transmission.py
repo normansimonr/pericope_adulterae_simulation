@@ -14,12 +14,13 @@ amalgamation (e.g., majority voting) is distinct and testable in isolation
 from the logic of textual corruption.
 """
 
-from typing import List
+from typing import List, TypeAlias
+
 import numpy as np
 from numpy.typing import NDArray
 
 # For type hinting clarity
-TaggedString = NDArray[np.int16]
+TaggedString: TypeAlias = NDArray[np.int16]
 
 
 def copy_from_single_exemplar(parent_text: TaggedString) -> TaggedString:

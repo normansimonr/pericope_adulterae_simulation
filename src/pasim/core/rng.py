@@ -27,7 +27,8 @@ Users should never use `numpy.random` directly, but instead receive a generator
 produced by this factory as part of their simulation's context.
 """
 
-from typing import Optional, List
+from typing import List, Optional
+
 import numpy as np
 
 

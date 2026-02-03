@@ -29,13 +29,13 @@ from witness-instance-level properties (reputation), ensuring that geographical
 constraints are applied before textual authority is considered.
 """
 
-from typing import List, Dict, Any
 import math
+from typing import Any, Dict, List
 
 from numpy.random import Generator as RNG
 
-from pasim.core.state import Manuscript
 from pasim.core.genealogy import GenealogyGraph
+from pasim.core.state import Manuscript
 
 # Type alias for a witness instance ID
 WitnessInstanceID = Any

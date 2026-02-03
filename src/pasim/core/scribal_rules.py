@@ -24,16 +24,18 @@ witness instance, which has been influenced by both its ancestry (contamination)
 and the scribal process itself (error).
 """
 
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional, TypeAlias
+
 import numpy as np
 from numpy.typing import NDArray
 
-from .transmission import copy_from_single_exemplar, majority_from_exemplars
-from .reputation import expected_mutation_proportion
-from .mutation import mutate_tagged_string
 from pasim.config.schema import SimulationConfig
+from pasim.core.mutation import mutate_tagged_string
+from pasim.core.reputation import expected_mutation_proportion
+from pasim.core.transmission import copy_from_single_exemplar, majority_from_exemplars
 
-TaggedString = NDArray[np.int16]
+# Define a type alias for a tagged string (a NumPy array of int16)
+TaggedString: TypeAlias = NDArray[np.int16]
 
 
 def apply_scribal_rule(

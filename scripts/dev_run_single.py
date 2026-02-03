@@ -9,13 +9,13 @@ pathway is working correctly after making changes to the simulation core or
 configuration.
 """
 
-from pasim.execution.runner import run_single
 from pasim.analysis.inspection import (
-    manuscript_table,
     genealogy_edges,
-    node_table,
     lineage_texts,
+    manuscript_table,
+    node_table,
 )
+from pasim.execution.runner import run_single
 
 # Execute the baseline experiment with a fixed seed for reproducibility
 result = run_single("experiments/exp001_baseline/params.yaml", seed=42)

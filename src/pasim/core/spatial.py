@@ -7,6 +7,7 @@ belong to the physical manuscript and not to the abstract genealogy graph.
 """
 
 from typing import Tuple
+
 from numpy.random import Generator as RNG
 
 from pasim.core.state import Region

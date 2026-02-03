@@ -5,15 +5,16 @@ parameter file. It orchestrates the setup, execution, and result aggregation
 for a vertical slice of the `pasim` framework.
 """
 
-from dataclasses import dataclass
 import os
-import yaml
-import networkx as nx
+from dataclasses import dataclass
 
-from pasim.core.simulation_state import GenerationState
+import networkx as nx
+import yaml
+
 from pasim.config.schema import SimulationConfig
-from pasim.core.rng import RNGContext
 from pasim.core.genealogy_generator import run_genealogy_generator
+from pasim.core.rng import RNGContext
+from pasim.core.simulation_state import GenerationState
 
 
 @dataclass

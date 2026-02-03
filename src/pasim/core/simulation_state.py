@@ -7,7 +7,7 @@ the definition of the core simulation state.
 
 import itertools
 from dataclasses import dataclass, field
-from typing import Dict, Any, MutableSet
+from typing import Any, Dict
 
 import networkx as nx
 

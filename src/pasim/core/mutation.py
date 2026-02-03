@@ -20,11 +20,9 @@ ensure that all mutations result in a valid textual state.
 import numpy as np
 from numpy.typing import NDArray
 
-from .tagged_string_constraints import (
-    sample_alternative_value,
-    validate_tagged_string,
-)
 from pasim.config.schema import SimulationConfig
+
+from .tagged_string_constraints import sample_alternative_value, validate_tagged_string
 
 
 def mutate_tagged_string(

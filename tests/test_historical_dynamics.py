@@ -5,37 +5,29 @@ and environmental transitions (like material or script usage) behave correctly
 and reproducibly.
 """
 
-import numpy as np
-from typing import Dict
-from collections import deque
-
-from pasim.core.genealogy_generator import (
-    handle_migration,
-    _spawn_new_manuscripts_from_demand,
-)
-from pasim.core.simulation_state import GenerationState, initialise_generation_state
-from pasim.core.historical_events import (
-    HistoricalEventManager,
-)
-from pasim.core.material_transition_manager import MaterialTransitionManager
-from pasim.core.script_transition_manager import ScriptTransitionManager
-from pasim.core.rng import RNGContext
-from pasim.core.state import (
-    Region,
-    Material,
-    Script,
-    Manuscript,
-    Witness,
-)
-from pasim.config.schema import (
-    get_demand_for_tick,
-    SimulationConfig,
-)
-from pasim.core.genealogy import (
-    add_root_node,
-)
-from pasim.core.text_initialisation import make_initial_text
 import copy
+from collections import deque
+from typing import Dict
+
+import numpy as np
+
+from pasim.config.schema import (
+    DemandScheduleConfig,
+    SimulationConfig,
+    get_demand_for_tick,
+)
+from pasim.core.genealogy import add_root_node
+from pasim.core.genealogy_generator import (
+    _spawn_new_manuscripts_from_demand,
+    handle_migration,
+)
+from pasim.core.historical_events import HistoricalEventManager
+from pasim.core.material_transition_manager import MaterialTransitionManager
+from pasim.core.rng import RNGContext
+from pasim.core.script_transition_manager import ScriptTransitionManager
+from pasim.core.simulation_state import GenerationState, initialise_generation_state
+from pasim.core.state import Manuscript, Material, Region, Script, Witness
+from pasim.core.text_initialisation import make_initial_text
 
 
 def _create_initial_state(
@@ -103,7 +95,7 @@ def test_persecution_correctness():
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule={0: {}}
+        demand_schedule={0: {}},
     )
 
     # 1. Initialize state with manuscripts in two regions
@@ -170,7 +162,7 @@ def test_persecution_determinism():
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule={0: {}}
+        demand_schedule={0: {}},
     )
 
     # --- Run 1 with seed 123 ---
@@ -537,7 +529,7 @@ def test_migration_determinism():
             p_internal_relocation=0.0,
             reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
             death_ticks=[],
-            demand_schedule={0: {}}
+            demand_schedule={0: {}},
         )
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
@@ -595,7 +587,7 @@ def test_event_ordering_stability():
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule=DemandScheduleConfig(root={0: {}})
+        demand_schedule=DemandScheduleConfig(root={0: {}}),
     )
 
     def run_with_order(order: list, seed: int) -> set:
@@ -625,7 +617,7 @@ def test_event_ordering_stability():
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule=DemandScheduleConfig(root={0: {}})
+        demand_schedule=DemandScheduleConfig(root={0: {}}),
     )
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]

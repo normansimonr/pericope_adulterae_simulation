@@ -20,12 +20,13 @@ graph object (`networkx.DiGraph`). Node identity is explicit and stable,
 ensuring that graph construction is reproducible.
 """
 
-from typing import List, Optional, Any
+from typing import List, Optional, TypeAlias
+
 import networkx as nx
 
 # Define type hints for clarity
-GenealogyGraph = nx.DiGraph
 NodeID = str
+GenealogyGraph: TypeAlias = nx.DiGraph
 
 
 def create_empty_genealogy() -> GenealogyGraph:

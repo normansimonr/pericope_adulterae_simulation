@@ -30,6 +30,6 @@ repos:
     rev: v1.10.0
     hooks:
       - id: mypy
-        args: [--no-strict-optional, --ignore-missing-imports]
+        args: [--no-strict-optional, --ignore-missing-imports, --disable-error-code=import-untyped]
         types: [python]
         files: \.py$

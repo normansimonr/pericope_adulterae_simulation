@@ -21,10 +21,11 @@ Each `HistoricalEvent` is a self-contained unit of logic that is triggered by
 the manager at the appropriate tick.
 """
 
-from typing import Optional, List, Set, Any, Dict
-from dataclasses import dataclass
-import numpy as np
 import math
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set
+
+import numpy as np
 
 from .simulation_state import GenerationState
 

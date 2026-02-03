@@ -1,6 +1,7 @@
-from enum import Enum
 from dataclasses import dataclass, field
-from typing import Tuple, Any, Dict, Iterable
+from enum import Enum
+from typing import Any, Dict, Iterable, Tuple
+
 import numpy as np
 
 
