@@ -42,7 +42,7 @@ Explicit Exclusions:
 """
 
 from collections import deque
-from typing import Dict, Any, Deque, Optional
+from typing import Dict, Any, Deque, Optional, List
 
 from numpy.random import Generator as RNG
 
@@ -125,7 +125,8 @@ def handle_migration(
         if rng.random() < p_region_migration:
             other_regions = [r for r in Region if r != manuscript.region]
             if other_regions:
-                new_region = rng.choice(other_regions)
+                new_region_value = rng.choice([r.value for r in other_regions])
+                new_region = Region(new_region_value) # Convert back to Enum
                 manuscript.region = new_region
                 manuscript.location = generate_random_coordinates(new_region, rng)
             continue  # A manuscript can only have one migration event per tick
@@ -182,7 +183,7 @@ def _spawn_new_manuscripts_from_demand(
     # Count alive manuscripts per region
     stock = {region: 0 for region in Region}
     # Also collect them for the exemplar selection step
-    alive_by_region = {region: [] for region in Region}
+    alive_by_region: Dict[Region, List[Manuscript]] = {region: [] for region in Region}
     for ms_id in state.alive_manuscripts:
         manuscript = state.registries.manuscripts.get(ms_id)
         stock[manuscript.region] += 1

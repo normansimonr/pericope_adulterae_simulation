@@ -25,7 +25,7 @@ import networkx as nx
 
 # Define type hints for clarity
 GenealogyGraph = nx.DiGraph
-NodeID = Any
+NodeID = str
 
 
 def create_empty_genealogy() -> GenealogyGraph:
@@ -44,8 +44,8 @@ def create_empty_genealogy() -> GenealogyGraph:
 def add_root_node(
     graph: GenealogyGraph,
     node_id: NodeID,
-    witness_id: int,
-    manuscript_id: int,
+    witness_id: str,
+    manuscript_id: str,
     birth_tick: int,
     reputation: int,
     death_tick: Optional[int] = None,
@@ -91,8 +91,8 @@ def add_child_node(
     graph: GenealogyGraph,
     node_id: NodeID,
     parent_node_ids: List[NodeID],
-    witness_id: int,
-    manuscript_id: int,
+    witness_id: str,
+    manuscript_id: str,
     birth_tick: int,
     reputation: int,
     death_tick: Optional[int] = None,

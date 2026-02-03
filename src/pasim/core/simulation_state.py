@@ -28,7 +28,7 @@ class GenerationState:
     tick: int
     graph: nx.DiGraph
     registries: StateRegistry
-    alive_manuscripts: MutableSet[str]
+    alive_manuscripts: set[str]
     manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
     # Counters for generating unique IDs
     manuscript_id_counter: itertools.count = field(

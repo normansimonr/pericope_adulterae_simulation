@@ -79,7 +79,7 @@ def _create_initial_state(
                 witness_id=witness_id,
                 manuscript_id=manuscript_id,
                 birth_tick=start_tick,
-                reputation=rng.integers(1, 6),
+                reputation=int(rng.integers(1, 6)),
             )
             state.manuscript_to_instance_map[manuscript.manuscript_id] = instance_id
 
@@ -98,9 +98,12 @@ def test_persecution_correctness():
     # Define a dummy config for _create_initial_state
     dummy_config = SimulationConfig(
         total_ticks=1,
+        text_length=100,
+        p_region_migration=0.0,
+        p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule={0: {}},
+        demand_schedule={0: {}}
     )
 
     # 1. Initialize state with manuscripts in two regions
@@ -162,9 +165,12 @@ def test_persecution_determinism():
 
     dummy_config = SimulationConfig(
         total_ticks=1,
+        text_length=100,
+        p_region_migration=0.0,
+        p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule={0: {}},
+        demand_schedule={0: {}}
     )
 
     # --- Run 1 with seed 123 ---
@@ -526,9 +532,12 @@ def test_migration_determinism():
         """Run a few ticks of migration and return the history."""
         dummy_config = SimulationConfig(
             total_ticks=1,
+            text_length=100,
+            p_region_migration=0.0,
+            p_internal_relocation=0.0,
             reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
             death_ticks=[],
-            demand_schedule={0: {}},
+            demand_schedule={0: {}}
         )
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
@@ -581,9 +590,12 @@ def test_event_ordering_stability():
 
     dummy_config = SimulationConfig(
         total_ticks=1,
+        text_length=100,
+        p_region_migration=0.0,
+        p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule={0: {}},
+        demand_schedule=DemandScheduleConfig(root={0: {}})
     )
 
     def run_with_order(order: list, seed: int) -> set:
@@ -606,15 +618,14 @@ def test_event_ordering_stability():
 
     # The set of destroyed manuscripts should be identical
     assert destroyed_ids1 == destroyed_ids2
-
-
-def test_no_side_effects():
-    """Ensure managers do not have unintended side effects on the simulation state."""
     dummy_config = SimulationConfig(
         total_ticks=1,
+        text_length=100,
+        p_region_migration=0.0,
+        p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         death_ticks=[],
-        demand_schedule={0: {}},
+        demand_schedule=DemandScheduleConfig(root={0: {}})
     )
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]
