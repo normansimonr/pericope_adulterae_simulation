@@ -8,6 +8,7 @@ Its purpose is to provide a quick way to verify that the end-to-end execution
 pathway is working correctly after making changes to the simulation core or
 configuration.
 """
+
 from pasim.execution.runner import run_single
 from pasim.analysis.inspection import (
     manuscript_table,
@@ -29,10 +30,14 @@ print(f"Graph edges: {result.graph.number_of_edges()}")
 print("-" * 20)
 print("Telemetry (first 3 ticks):")
 for record in result.state.telemetry[:3]:
-    print(f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total")
+    print(
+        f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total"
+    )
 print("Telemetry (last 3 ticks):")
 for record in result.state.telemetry[-3:]:
-    print(f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total")
+    print(
+        f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total"
+    )
 print("--- End of Summary ---")
 
 

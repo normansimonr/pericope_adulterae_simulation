@@ -5,6 +5,7 @@ This module provides functions for assigning region-specific coordinates to
 manuscripts. It enforces the architectural principle that spatial properties
 belong to the physical manuscript and not to the abstract genealogy graph.
 """
+
 from typing import Tuple
 from numpy.random import Generator as RNG
 

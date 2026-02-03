@@ -22,7 +22,7 @@ the manager at the appropriate tick.
 """
 
 from typing import Optional, List, Set, Any, Dict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 import math
 
@@ -46,6 +46,7 @@ class HistoricalEvent:
         regions: If not None, a set of region identifiers to which this event
                  is restricted. If None, the event is global.
     """
+
     start_tick: int
     end_tick: Optional[int] = None
     regions: Optional[Set[str]] = None
@@ -63,7 +64,9 @@ class HistoricalEvent:
         Raises:
             NotImplementedError: If not implemented by a subclass.
         """
-        raise NotImplementedError("Each historical event must implement the 'apply' method.")
+        raise NotImplementedError(
+            "Each historical event must implement the 'apply' method."
+        )
 
     def is_active(self, tick: int) -> bool:
         """
@@ -94,6 +97,7 @@ class PersecutionEvent(HistoricalEvent):
         kill_proportion (float): The fraction of eligible manuscripts to be
                                  destroyed, in the interval [0.0, 1.0].
     """
+
     kill_proportion: float
 
     def __post_init__(self):
@@ -135,11 +139,7 @@ class PersecutionEvent(HistoricalEvent):
 
         # 3. Randomly choose victims (IDs)
         eligible_array = np.array(list(eligible_manuscript_ids), dtype=object)
-        victims_ids = rng.choice(
-            eligible_array,
-            size=n_to_destroy,
-            replace=False
-        )
+        victims_ids = rng.choice(eligible_array, size=n_to_destroy, replace=False)
 
         # 4. Kill them (remove from alive set)
         state.alive_manuscripts.difference_update(victims_ids)
@@ -150,13 +150,13 @@ def create_event_from_config(config: Dict[str, Any]) -> HistoricalEvent:
     Factory function to create a HistoricalEvent from a configuration dictionary.
     """
     event_type = config.pop("event_type")
-    
+
     if event_type == "persecution":
         # Ensure 'regions' is a set if it exists
-        if 'regions' in config and config['regions'] is not None:
-            config['regions'] = set(config['regions'])
+        if "regions" in config and config["regions"] is not None:
+            config["regions"] = set(config["regions"])
         return PersecutionEvent(**config)
-    
+
     raise ValueError(f"Unknown historical event type: {event_type}")
 
 
@@ -174,18 +174,21 @@ class HistoricalEventManager:
                            a historical event.
         """
         events = [create_event_from_config(cfg.copy()) for cfg in event_configs or []]
-        
+
         self._events = sorted(
-            events,
-            key=lambda e: (e.start_tick, e.__class__.__name__)
+            events, key=lambda e: (e.start_tick, e.__class__.__name__)
         )
 
-    def apply_events_for_tick(self, state: GenerationState, rng: np.random.Generator) -> None:
+    def apply_events_for_tick(
+        self, state: GenerationState, rng: np.random.Generator
+    ) -> None:
         """
         Finds and applies all active historical events for the current tick.
         """
         current_tick = state.tick
-        active_events = [event for event in self._events if event.is_active(current_tick)]
+        active_events = [
+            event for event in self._events if event.is_active(current_tick)
+        ]
 
         for event in active_events:
             event.apply(state, rng)

@@ -28,12 +28,13 @@ This design cleanly separates manuscript-level properties (location, region)
 from witness-instance-level properties (reputation), ensuring that geographical
 constraints are applied before textual authority is considered.
 """
+
 from typing import List, Dict, Any
 import math
 
 from numpy.random import Generator as RNG
 
-from pasim.core.state import Manuscript, Region
+from pasim.core.state import Manuscript
 from pasim.core.genealogy import GenealogyGraph
 
 # Type alias for a witness instance ID
@@ -42,7 +43,7 @@ WitnessInstanceID = Any
 
 def _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:
     """Calculates the Euclidean distance between two points."""
-    return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
 def select_exemplars(
@@ -85,8 +86,7 @@ def select_exemplars(
 
     # 3. Reputation-based Ranking
     candidate_instances.sort(
-        key=lambda inst_id: graph.nodes[inst_id]['reputation'],
-        reverse=True
+        key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True
     )
 
     # 4. Determine number of exemplars

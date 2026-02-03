@@ -21,16 +21,17 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .tagged_string_constraints import (
-    TAGGED_STRING_LENGTH,
     sample_alternative_value,
     validate_tagged_string,
 )
+from pasim.config.schema import SimulationConfig
 
 
 def mutate_tagged_string(
     tagged_string: NDArray[np.int16],
     rng: np.random.Generator,
     expected_proportion: float,
+    config: SimulationConfig,
 ) -> NDArray[np.int16]:
     """
     Applies scribal mutations to a tagged string.
@@ -45,6 +46,7 @@ def mutate_tagged_string(
         rng: A NumPy random number generator for all stochastic operations.
         expected_proportion: A float in the interval [0.0, 1.0] representing
                              the expected proportion of segments to mutate.
+        config: The simulation configuration object.
 
     Returns:
         A new, mutated tagged string.
@@ -71,9 +73,9 @@ def mutate_tagged_string(
             f"but got {expected_proportion}."
         )
 
-    if len(tagged_string) != TAGGED_STRING_LENGTH:
+    if len(tagged_string) != config.text_length:
         raise ValueError(
-            f"Tagged string must have length {TAGGED_STRING_LENGTH}, "
+            f"Tagged string must have length {config.text_length}, "
             f"but got {len(tagged_string)}."
         )
 
@@ -81,15 +83,13 @@ def mutate_tagged_string(
         return tagged_string.copy()
 
     # Calculate the number of segments to mutate
-    n_mutations = int(round(expected_proportion * TAGGED_STRING_LENGTH))
+    n_mutations = int(round(expected_proportion * config.text_length))
 
     if n_mutations == 0:
         return tagged_string.copy()
 
     # Randomly select unique indices to mutate
-    indices_to_mutate = rng.choice(
-        TAGGED_STRING_LENGTH, size=n_mutations, replace=False
-    )
+    indices_to_mutate = rng.choice(config.text_length, size=n_mutations, replace=False)
 
     # Create a new array to store the mutated string
     new_string = tagged_string.copy()
@@ -101,6 +101,6 @@ def mutate_tagged_string(
         new_string[index] = new_value
 
     # Final safety check to ensure the output is valid
-    validate_tagged_string(new_string)
+    validate_tagged_string(new_string, config)
 
     return new_string

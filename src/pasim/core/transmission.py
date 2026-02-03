@@ -14,7 +14,7 @@ amalgamation (e.g., majority voting) is distinct and testable in isolation
 from the logic of textual corruption.
 """
 
-from typing import List, Tuple
+from typing import List
 import numpy as np
 from numpy.typing import NDArray
 

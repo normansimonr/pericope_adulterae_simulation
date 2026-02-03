@@ -52,12 +52,12 @@ class ScriptTransitionManager:
         if not schedule_configs:
             raise ValueError("Script transition schedule cannot be empty.")
 
-        self._schedule = sorted(schedule_configs, key=lambda x: x['start_tick'])
+        self._schedule = sorted(schedule_configs, key=lambda x: x["start_tick"])
 
         self._processed_schedule: List[Dict[str, Any]] = []
         for entry in self._schedule:
-            start_tick = entry['start_tick']
-            distribution_dict = entry['distribution']
+            start_tick = entry["start_tick"]
+            distribution_dict = entry["distribution"]
 
             scripts_list = []
             probabilities_list = []
@@ -67,24 +67,32 @@ class ScriptTransitionManager:
                 try:
                     script_enum = Script[script_str.upper()]
                 except KeyError:
-                    raise ValueError(f"Unknown script '{script_str}' in schedule at tick {start_tick}. "
-                                     f"Valid scripts are: {[s.name.lower() for s in Script]}.")
+                    raise ValueError(
+                        f"Unknown script '{script_str}' in schedule at tick {start_tick}. "
+                        f"Valid scripts are: {[s.name.lower() for s in Script]}."
+                    )
 
                 if prob < 0:
-                    raise ValueError(f"Script probability for '{script_str}' at tick {start_tick} is negative: {prob}.")
+                    raise ValueError(
+                        f"Script probability for '{script_str}' at tick {start_tick} is negative: {prob}."
+                    )
 
                 scripts_list.append(script_enum)
                 probabilities_list.append(prob)
                 total_prob += prob
 
             if not np.isclose(total_prob, 1.0):
-                raise ValueError(f"Script probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}.")
+                raise ValueError(
+                    f"Script probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}."
+                )
 
-            self._processed_schedule.append({
-                'start_tick': start_tick,
-                'scripts': scripts_list,
-                'probabilities': probabilities_list
-            })
+            self._processed_schedule.append(
+                {
+                    "start_tick": start_tick,
+                    "scripts": scripts_list,
+                    "probabilities": probabilities_list,
+                }
+            )
 
     def get_script_for_tick(self, tick: int, rng: np.random.Generator) -> Script:
         """
@@ -99,7 +107,7 @@ class ScriptTransitionManager:
         """
         active_distribution = None
         for entry in reversed(self._processed_schedule):
-            if tick >= entry['start_tick']:
+            if tick >= entry["start_tick"]:
                 active_distribution = entry
                 break
 
@@ -107,7 +115,6 @@ class ScriptTransitionManager:
             raise RuntimeError(f"No active script distribution found for tick {tick}.")
 
         sampled_script = rng.choice(
-            a=active_distribution['scripts'],
-            p=active_distribution['probabilities']
+            a=active_distribution["scripts"], p=active_distribution["probabilities"]
         )
         return sampled_script

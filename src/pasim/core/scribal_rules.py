@@ -31,6 +31,7 @@ from numpy.typing import NDArray
 from .transmission import copy_from_single_exemplar, majority_from_exemplars
 from .reputation import expected_mutation_proportion
 from .mutation import mutate_tagged_string
+from pasim.config.schema import SimulationConfig
 
 TaggedString = NDArray[np.int16]
 
@@ -39,6 +40,7 @@ def apply_scribal_rule(
     exemplar_texts: List[TaggedString],
     rng: np.random.Generator,
     reputation: int,
+    config: SimulationConfig,
     mutation_mapping: Optional[Dict[int, float]] = None,
 ) -> TaggedString:
     """
@@ -55,6 +57,7 @@ def apply_scribal_rule(
              (tie-breaking in majority voting and all mutation mechanics).
         reputation: The integer reputation level (1-5) of the scribe/witness,
                     which determines the error intensity.
+        config: The simulation configuration object.
         mutation_mapping: An optional dictionary to override the default
                           reputation-to-mutation-proportion mapping.
 
@@ -84,6 +87,6 @@ def apply_scribal_rule(
     proportion = expected_mutation_proportion(reputation, mutation_mapping)
 
     # Stage 3: Mutation
-    mutated_text = mutate_tagged_string(base_text, rng, proportion)
+    mutated_text = mutate_tagged_string(base_text, rng, proportion, config)
 
     return mutated_text

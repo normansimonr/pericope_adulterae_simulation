@@ -4,6 +4,7 @@ complete state of a genealogy generation run. It has been extracted from
 genealogy_generator.py to break circular import dependencies and centralize
 the definition of the core simulation state.
 """
+
 import itertools
 from dataclasses import dataclass, field
 from typing import Dict, Any, MutableSet
@@ -16,16 +17,29 @@ from pasim.core.state import StateRegistry
 
 @dataclass
 class GenerationState:
-    """Encapsulates the complete state for a genealogy generation run."""
+    """Encapsulates the complete state for a genealogy generation run.
+
+    This dataclass holds all dynamic information for the simulation, including
+    the genealogy graph, registries for all entities, and counters. The actual
+    textual content of each witness instance is stored separately within the
+    `registries` attribute, specifically in `state.registries.instance_texts`.
+    """
+
     tick: int
     graph: nx.DiGraph
     registries: StateRegistry
     alive_manuscripts: MutableSet[str]
     manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
     # Counters for generating unique IDs
-    manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
-    witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
-    witness_instance_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+    manuscript_id_counter: itertools.count = field(
+        default_factory=lambda: itertools.count(1)
+    )
+    witness_id_counter: itertools.count = field(
+        default_factory=lambda: itertools.count(1)
+    )
+    witness_instance_id_counter: itertools.count = field(
+        default_factory=lambda: itertools.count(1)
+    )
     telemetry: list = field(default_factory=list)
 
 

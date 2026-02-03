@@ -136,8 +136,8 @@ The `pasim` framework will facilitate the following general workflow for researc
 
 1.  **Configuration**: Users will define simulation parameters (e.g., number of scribes, error rates, manuscript branching, **migration probabilities**, simulation duration, **regional demand for new manuscripts**, historical events like `persecutions`, and material transition schedules like `material_transitions`) using configuration files, likely validated by the `config/schema.py`.
 2.  **Initialization**: The simulation will initialize its state based on an initial text (the Pericope Adulterae) and the specified configuration.
-3.  **Execution**: The `execution/` module will manage the running of Monte Carlo simulations. This involves iteratively applying mechanistic rules (like death and migration), processing exogenous historical events, and dynamically spawning new manuscripts based on regional demand. All stochasticity is controlled via `core/rng.py` to ensure reproducibility.
-4.  **Data Collection**: Throughout the simulation, relevant data points (e.g., changes in text, manuscript lineages, manuscript population dynamics) will be collected and stored via the `io/` module.
+3.  **Execution**: The `execution/` module will manage the running of Monte Carlo simulations. This involves iteratively applying mechanistic rules (like death and migration), processing exogenous historical events, and dynamically spawning new manuscripts based on regional demand. For each new witness instance, its textual content is generated either as an initial autograph text (using `text_initialisation.py`) or by copying and mutating its exemplar(s) through the `scribal_rules` pipeline. All stochasticity is controlled via `core/rng.py` to ensure reproducibility.
+4.  **Data Collection**: Throughout the simulation, relevant data points (e.g., changes in text, manuscript lineages, manuscript population dynamics, **and the textual content of each witness instance via `state.registries.instance_texts`**) will be collected and stored via the `io/` module.
 5.  **Analysis**: After simulation completion, the `analysis/` module will be used to process the collected data, calculate metrics, generate plots, and perform statistical analyses to derive insights into textual transmission.
 6.  **Reporting**: Results and analyses will be outputted in various formats for researchers to study.
 
@@ -218,6 +218,7 @@ This module defines the comprehensive, hierarchical configuration schema for `pa
     *   Includes validators for tick values, region names, and demand counts.
 *   **`SimulationConfig`:** The root model encompassing all simulation parameters.
     *   `total_ticks`: The total duration of the simulation.
+    *   `text_length`: The length of the tagged string used for textual content.
     *   `p_region_migration`: Probability of a manuscript migrating to a different region.
     *   `p_internal_relocation`: Probability of a manuscript relocating within its current region.
     *   `reputation_distribution`: A dictionary mapping reputation scores (1-5) to their probabilities.
@@ -317,7 +318,7 @@ The module emphasizes a clear separation between the abstract `Witness Instance`
 
 **Exclusions:**
 
-This module explicitly excludes exemplar selection policies (handled by `exemplar_selection.py`), contamination/scribal error models (handled by `scribal_rules.py`, `transmission.py`, `mutation.py`), textual state, and batch execution/file I/O, delegating these responsibilities to other specialized modules.
+This module explicitly excludes exemplar selection policies (handled by `exemplar_selection.py`), contamination/scribal error models (handled by `scribal_rules.py`, `transmission.py`, `mutation.py`), and batch execution/file I/O, delegating these responsibilities to other specialized modules.
 
 ### `src/pasim/core/historical_events.py`
 
@@ -566,7 +567,7 @@ This module defines the fundamental data structures and identity registries that
         *   `add(witness)`: Adds a witness, ensuring `witness_id` uniqueness and that its `manuscript_id` refers to an existing manuscript.
         *   `get(witness_id)`: Retrieves a witness by ID.
         *   Provides `__contains__`, `__len__`, and `items()` for collection management.
-*   **`StateRegistry`**: A top-level dataclass that acts as a container for both `ManuscriptRegistry` and `WitnessRegistry`. It provides a centralized, consistent snapshot of all entities in the simulation without containing any simulation logic itself. The `WitnessRegistry` is initialized using the `ManuscriptRegistry` in `__post_init__`.
+*   **`StateRegistry`**: A top-level dataclass that acts as a container for both `ManuscriptRegistry`, `WitnessRegistry`, and the `instance_texts` dictionary. It provides a centralized, consistent snapshot of all entities in the simulation without containing any simulation logic itself. The `WitnessRegistry` is initialized using the `ManuscriptRegistry` in `__post_init__`.
 
 This module is foundational for defining the entities and their relationships within the simulation, ensuring data integrity and providing structured access to the simulation's current state.
 
@@ -576,16 +577,15 @@ This module serves as the authoritative source for defining the legal state spac
 
 **Key Constants and Functions:**
 
-*   **`TAGGED_STRING_LENGTH` (int):** A constant defining the fixed length for every tagged string in the simulation (currently 100). This ensures all textual representations are uniformly sized.
 *   **`LEGAL_SEGMENT_VALUES` (NDArray[np.int16]):** A NumPy array explicitly listing all permissible integer values that a single segment within a tagged string can hold (currently `[1, 2, 3, 4, 5]`). This acts as the "alphabet" for the textual model.
 *   **`SegmentValue` (Type Alias):** An alias for `np.int16` for clarity in type hinting.
 *   **`is_valid_segment_value(value: SegmentValue) -> bool`:**
     *   A simple predicate function that checks if a given integer `value` is present within `LEGAL_SEGMENT_VALUES`.
-*   **`validate_tagged_string(tagged_string: NDArray[np.int16]) -> None`:**
+*   **`validate_tagged_string(tagged_string: NDArray[np.int16], config: SimulationConfig) -> None`:**
     *   A comprehensive validation function for an entire `tagged_string` (NumPy array).
     *   Performs multiple checks to ensure the string's integrity:
         *   Confirms it's a NumPy array.
-        *   Verifies its length matches `TAGGED_STRING_LENGTH`.
+        *   Verifies its length matches `config.text_length`.
         *   Checks that its data type is integer-like.
         *   Ensures that *all* values within the array are `is_valid_segment_value`.
     *   Raises `TypeError` or `ValueError` if any validation fails. Intended as a safeguard after creation or modification.
@@ -595,6 +595,14 @@ This module serves as the authoritative source for defining the legal state spac
     *   Raises `ValueError` if `current_value` itself is not valid.
 
 This module is fundamental for maintaining the integrity and consistency of the textual data throughout the simulation, providing a robust foundation for modeling textual variation.
+
+### `src/pasim/core/text_initialisation.py`
+
+This module provides utility functions for generating the initial textual content (tagged strings) for new witness instances.
+
+**Key Functionality:**
+
+*   **`make_initial_text(config)`**: Creates a base tagged string for the autograph (the first witness instance). This function initializes a NumPy array of a specified `text_length` (from the simulation configuration) with a default legal segment value.
 
 ### `src/pasim/core/transmission.py`
 

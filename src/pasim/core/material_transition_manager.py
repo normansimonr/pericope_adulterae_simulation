@@ -57,44 +57,54 @@ class MaterialTransitionManager:
             # If no schedule is provided, material assignment should fall back
             # to some default or be explicitly configured for a single choice.
             # For now, we raise an error to ensure configuration.
-            raise ValueError("Material transition schedule cannot be empty. "
-                             "Provide at least one entry, e.g., for start_tick 0.")
+            raise ValueError(
+                "Material transition schedule cannot be empty. "
+                "Provide at least one entry, e.g., for start_tick 0."
+            )
 
         # Sort the schedule by start_tick to ensure correct lookup
-        self._schedule = sorted(schedule_configs, key=lambda x: x['start_tick'])
+        self._schedule = sorted(schedule_configs, key=lambda x: x["start_tick"])
 
         # Pre-process and validate distributions
         self._processed_schedule: List[Dict[str, Any]] = []
         for entry in self._schedule:
-            start_tick = entry['start_tick']
-            distribution_dict = entry['distribution']
-            
-            materials_list = [] # List of Material enum members
-            probabilities_list = [] # List of floats
+            start_tick = entry["start_tick"]
+            distribution_dict = entry["distribution"]
+
+            materials_list = []  # List of Material enum members
+            probabilities_list = []  # List of floats
             total_prob = 0.0
 
             for mat_str, prob in distribution_dict.items():
                 try:
                     material_enum = Material[mat_str.upper()]
                 except KeyError:
-                    raise ValueError(f"Unknown material '{mat_str}' in schedule at tick {start_tick}. "
-                                     f"Valid materials are: {[m.name.lower() for m in Material]}.")
-                
+                    raise ValueError(
+                        f"Unknown material '{mat_str}' in schedule at tick {start_tick}. "
+                        f"Valid materials are: {[m.name.lower() for m in Material]}."
+                    )
+
                 if prob < 0:
-                    raise ValueError(f"Material probability for '{mat_str}' at tick {start_tick} is negative: {prob}.")
-                
+                    raise ValueError(
+                        f"Material probability for '{mat_str}' at tick {start_tick} is negative: {prob}."
+                    )
+
                 materials_list.append(material_enum)
                 probabilities_list.append(prob)
                 total_prob += prob
-            
+
             if not np.isclose(total_prob, 1.0):
-                raise ValueError(f"Material probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}.")
-            
-            self._processed_schedule.append({
-                'start_tick': start_tick,
-                'materials': materials_list,
-                'probabilities': probabilities_list
-            })
+                raise ValueError(
+                    f"Material probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}."
+                )
+
+            self._processed_schedule.append(
+                {
+                    "start_tick": start_tick,
+                    "materials": materials_list,
+                    "probabilities": probabilities_list,
+                }
+            )
 
     def get_material_for_tick(self, tick: int, rng: np.random.Generator) -> Material:
         """
@@ -110,17 +120,18 @@ class MaterialTransitionManager:
         active_distribution = None
         # Iterate backwards to find the most recent start_tick <= current tick
         for entry in reversed(self._processed_schedule):
-            if tick >= entry['start_tick']:
+            if tick >= entry["start_tick"]:
                 active_distribution = entry
                 break
-        
+
         if active_distribution is None:
             # This case should be prevented by validation ensuring start_tick 0 exists
-            raise RuntimeError(f"No active material distribution found for tick {tick}. "
-                               "Ensure a distribution with start_tick <= current_tick is always provided.")
-        
+            raise RuntimeError(
+                f"No active material distribution found for tick {tick}. "
+                "Ensure a distribution with start_tick <= current_tick is always provided."
+            )
+
         sampled_material = rng.choice(
-            a=active_distribution['materials'],
-            p=active_distribution['probabilities']
+            a=active_distribution["materials"], p=active_distribution["probabilities"]
         )
         return sampled_material

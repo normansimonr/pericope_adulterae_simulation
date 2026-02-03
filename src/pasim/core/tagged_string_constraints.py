@@ -15,13 +15,10 @@ simulation. All higher-level logic that creates or modifies tagged strings must
 use the primitives in this module to validate their operations.
 """
 
-from typing import Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-# The fixed length of every tagged string in the simulation.
-# This should be consistent with the definition in `core.model`.
-TAGGED_STRING_LENGTH = 100
+from pasim.config.schema import SimulationConfig
 
 # The single, authoritative definition of the set of legal integer values
 # that a segment in a tagged string can hold. This is the "alphabet" of
@@ -48,7 +45,9 @@ def is_valid_segment_value(value: SegmentValue) -> bool:
     return value in LEGAL_SEGMENT_VALUES
 
 
-def validate_tagged_string(tagged_string: NDArray[np.int16]) -> None:
+def validate_tagged_string(
+    tagged_string: NDArray[np.int16], config: SimulationConfig
+) -> None:
     """
     Verifies that an entire tagged string is structurally and legally valid.
 
@@ -58,6 +57,7 @@ def validate_tagged_string(tagged_string: NDArray[np.int16]) -> None:
 
     Args:
         tagged_string: The NumPy array representing the tagged string.
+        config: The simulation configuration object.
 
     Returns:
         `None` if the tagged string is valid.
@@ -65,7 +65,7 @@ def validate_tagged_string(tagged_string: NDArray[np.int16]) -> None:
     Failure Conditions:
         - Raises `TypeError` if `tagged_string` is not a NumPy array.
         - Raises `ValueError` if the tagged string does not have the correct
-          length (`TAGGED_STRING_LENGTH`).
+          length (`config.text_length`).
         - Raises `ValueError` if the array's dtype is not integer-like.
         - Raises `ValueError` if any value in the array is not a legal
           segment value.
@@ -73,9 +73,9 @@ def validate_tagged_string(tagged_string: NDArray[np.int16]) -> None:
     if not isinstance(tagged_string, np.ndarray):
         raise TypeError("Tagged string must be a NumPy array.")
 
-    if len(tagged_string) != TAGGED_STRING_LENGTH:
+    if len(tagged_string) != config.text_length:
         raise ValueError(
-            f"Tagged string must have length {TAGGED_STRING_LENGTH}, "
+            f"Tagged string must have length {config.text_length}, "
             f"but got {len(tagged_string)}."
         )
 

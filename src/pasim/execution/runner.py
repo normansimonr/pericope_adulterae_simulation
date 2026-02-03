@@ -4,6 +4,7 @@ entry point for executing a single, in-memory simulation run from a user-provide
 parameter file. It orchestrates the setup, execution, and result aggregation
 for a vertical slice of the `pasim` framework.
 """
+
 from dataclasses import dataclass
 import os
 import yaml
@@ -22,6 +23,7 @@ class SimulationResult:
     This object provides a consistent interface for accessing the final state,
     genealogy graph, configuration, and other metadata from the simulation.
     """
+
     state: GenerationState
     graph: nx.DiGraph
     config: SimulationConfig
@@ -59,12 +61,14 @@ def run_single(params_path: str, seed: int = 20240105) -> SimulationResult:
     """
     # 1. Validate path
     if "experiments/" not in params_path:
-        raise ValueError("Parameter file must be located in the 'experiments/' directory.")
+        raise ValueError(
+            "Parameter file must be located in the 'experiments/' directory."
+        )
     if not os.path.exists(params_path):
         raise FileNotFoundError(f"Parameter file not found at: {params_path}")
 
     # 2. Load parameters
-    with open(params_path, 'r') as f:
+    with open(params_path, "r") as f:
         params_dict = yaml.safe_load(f)
 
     # 3. Validate configuration

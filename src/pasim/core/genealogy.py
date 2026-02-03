@@ -183,7 +183,9 @@ def validate_genealogy(graph: GenealogyGraph) -> None:
         raise TypeError("Graph must be a networkx.DiGraph instance.")
 
     if not nx.is_directed_acyclic_graph(graph):
-        raise nx.NetworkXError("The genealogy graph must be a Directed Acyclic Graph (DAG).")
+        raise nx.NetworkXError(
+            "The genealogy graph must be a Directed Acyclic Graph (DAG)."
+        )
 
     required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
     for node_id, attrs in graph.nodes(data=True):

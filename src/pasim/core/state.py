@@ -1,19 +1,24 @@
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Tuple, Any, Dict, Iterable, ItemsView
+from typing import Tuple, Any, Dict, Iterable
+import numpy as np
+
 
 class Material(Enum):
     """
     Represents the material on which a manuscript is written.
     """
+
     PARCHMENT = "parchment"
     PAPYRUS = "papyrus"
     PAPER = "paper"
+
 
 class Region(Enum):
     """
     Represents the geographical region where a manuscript is located or originated.
     """
+
     ASIA_MINOR = "Asia Minor"
     EGYPT = "Egypt"
     LEVANT = "Levant"
@@ -23,6 +28,7 @@ class Script(Enum):
     """
     Represents the script style used in a textual witness.
     """
+
     UNCIAL = "uncial"
     MINUSCULE = "minuscule"
 
@@ -36,6 +42,7 @@ class Manuscript:
     tick-based timeline, and mutable attributes describing its physical
     characteristics and geographical location.
     """
+
     manuscript_id: str
     """
     A unique identifier for the manuscript. This ID is immutable and serves
@@ -73,6 +80,7 @@ class Manuscript:
     geographical location. This attribute can change over time.
     """
 
+
 @dataclass
 class Witness:
     """
@@ -83,6 +91,7 @@ class Witness:
     does not have independent temporal or spatial existence; its presence
     is tied to the Manuscript it belongs to via `manuscript_id`.
     """
+
     witness_id: str
     """
     A unique identifier for this textual witness. This ID distinguishes
@@ -108,6 +117,7 @@ class Witness:
     this specific witness. This can include information not captured
     by the core fields. Defaults to an empty dictionary.
     """
+
 
 class ManuscriptRegistry:
     """
@@ -198,8 +208,10 @@ class StateRegistry:
     exist in the simulation. It has no simulation logic itself but serves
     as the foundational context for the simulation model.
     """
+
     manuscripts: ManuscriptRegistry = field(default_factory=ManuscriptRegistry)
     witnesses: WitnessRegistry = field(init=False)
+    instance_texts: dict[str, np.ndarray] = field(default_factory=dict)
 
     def __post_init__(self):
         self.witnesses = WitnessRegistry(self.manuscripts)
