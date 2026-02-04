@@ -45,14 +45,10 @@ def validate_reputation(reputation: int) -> None:
     if not isinstance(reputation, int):
         raise ValueError(f"Reputation must be an integer, but got {type(reputation)}.")
     if reputation < 1 or reputation > 5:
-        raise ValueError(
-            f"Reputation must be an integer between 1 and 5 (inclusive), but got {reputation}."
-        )
+        raise ValueError(f"Reputation must be an integer between 1 and 5 (inclusive), but got {reputation}.")
 
 
-def expected_mutation_proportion(
-    reputation: int, mapping: Optional[Dict[int, float]] = None
-) -> float:
+def expected_mutation_proportion(reputation: int, mapping: Optional[Dict[int, float]] = None) -> float:
     """
     Returns the expected proportion of segments that should mutate for a given reputation.
 
@@ -88,16 +84,13 @@ def expected_mutation_proportion(
 
     if not (0.0 <= proportion <= 1.0):
         raise ValueError(
-            f"Mapped mutation proportion '{proportion}' for reputation '{reputation}' "
-            "is not within the valid range [0.0, 1.0]."
+            f"Mapped mutation proportion '{proportion}' for reputation '{reputation}' " "is not within the valid range [0.0, 1.0]."
         )
 
     return proportion
 
 
-def sample_reputation(
-    rng: np.random.Generator, reputation_distribution: Dict[int, float]
-) -> int:
+def sample_reputation(rng: np.random.Generator, reputation_distribution: Dict[int, float]) -> int:
     """
     Samples a reputation value based on a user-defined probability distribution.
 

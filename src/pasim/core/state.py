@@ -176,10 +176,7 @@ class WitnessRegistry:
         if witness.witness_id in self._witnesses:
             raise KeyError(f"Duplicate witness_id: {witness.witness_id}")
         if witness.manuscript_id not in self._manuscript_registry:
-            raise ValueError(
-                f"Witness {witness.witness_id} references non-existent "
-                f"manuscript_id: {witness.manuscript_id}"
-            )
+            raise ValueError(f"Witness {witness.witness_id} references non-existent " f"manuscript_id: {witness.manuscript_id}")
         self._witnesses[witness.witness_id] = witness
 
     def get(self, witness_id: str) -> Witness:

@@ -47,9 +47,7 @@ def is_valid_segment_value(value: SegmentValue) -> bool:
     return value in LEGAL_SEGMENT_VALUES
 
 
-def validate_tagged_string(
-    tagged_string: NDArray[np.int16], config: SimulationConfig
-) -> None:
+def validate_tagged_string(tagged_string: NDArray[np.int16], config: SimulationConfig) -> None:
     """
     Verifies that an entire tagged string is structurally and legally valid.
 
@@ -76,24 +74,16 @@ def validate_tagged_string(
         raise TypeError("Tagged string must be a NumPy array.")
 
     if len(tagged_string) != config.text_length:
-        raise ValueError(
-            f"Tagged string must have length {config.text_length}, "
-            f"but got {len(tagged_string)}."
-        )
+        raise ValueError(f"Tagged string must have length {config.text_length}, " f"but got {len(tagged_string)}.")
 
     if not np.issubdtype(tagged_string.dtype, np.integer):
-        raise ValueError(
-            "Tagged string dtype must be an integer type, "
-            f"but got {tagged_string.dtype}."
-        )
+        raise ValueError("Tagged string dtype must be an integer type, " f"but got {tagged_string.dtype}.")
 
     if not np.all(np.isin(tagged_string, LEGAL_SEGMENT_VALUES)):
         raise ValueError("Tagged string contains illegal segment values.")
 
 
-def sample_alternative_value(
-    current_value: SegmentValue, rng: np.random.Generator
-) -> SegmentValue:
+def sample_alternative_value(current_value: SegmentValue, rng: np.random.Generator) -> SegmentValue:
     """
     Samples a new legal segment value that is different from the current one.
 

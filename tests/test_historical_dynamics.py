@@ -10,7 +10,6 @@ from collections import deque
 from typing import Dict
 
 import numpy as np
-
 from pasim.config.schema import (
     DemandScheduleConfig,
     SimulationConfig,
@@ -122,9 +121,7 @@ def test_persecution_correctness():
     # 3. Assertions
     # 3.1. Approximately half of Egypt's manuscripts are destroyed
     egypt_survivors = [
-        state.registries.manuscripts.get(m)
-        for m in state.alive_manuscripts
-        if state.registries.manuscripts.get(m).region == Region.EGYPT
+        state.registries.manuscripts.get(m) for m in state.alive_manuscripts if state.registries.manuscripts.get(m).region == Region.EGYPT
     ]
     assert len(egypt_survivors) == 5
 
@@ -449,16 +446,12 @@ def test_demand_schedule():
         Region.ASIA_MINOR: 3,
     }  # Falls back to tick 0
     assert get_demand_for_tick(dummy_full_params, 10) == {Region.EGYPT: 8}
-    assert get_demand_for_tick(dummy_full_params, 15) == {
-        Region.EGYPT: 8
-    }  # Falls back to tick 10
+    assert get_demand_for_tick(dummy_full_params, 15) == {Region.EGYPT: 8}  # Falls back to tick 10
 
     # 3. Test spawning to meet demand
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]
-    state = _create_initial_state(
-        rng, {Region.EGYPT: 2, Region.ASIA_MINOR: 1}, dummy_simulation_config
-    )  # Start below demand
+    state = _create_initial_state(rng, {Region.EGYPT: 2, Region.ASIA_MINOR: 1}, dummy_simulation_config)  # Start below demand
 
     # Run spawning at tick 5 (should use demand from tick 0)
     state.tick = 5
@@ -533,22 +526,15 @@ def test_migration_determinism():
         )
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
-        state = _create_initial_state(
-            rng, {Region.EGYPT: 10, Region.ASIA_MINOR: 10}, dummy_config
-        )
+        state = _create_initial_state(rng, {Region.EGYPT: 10, Region.ASIA_MINOR: 10}, dummy_config)
 
         history = {}
         for tick in range(1, 5):
             state.tick = tick
-            handle_migration(
-                state, rng, p_region_migration=0.5, p_internal_relocation=0.5
-            )
+            handle_migration(state, rng, p_region_migration=0.5, p_internal_relocation=0.5)
 
             # Record the region of each manuscript at this tick
-            history[tick] = {
-                m: state.registries.manuscripts.get(m).region
-                for m in state.alive_manuscripts
-            }
+            history[tick] = {m: state.registries.manuscripts.get(m).region for m in state.alive_manuscripts}
         return history
 
     # Run simulation twice with the same seed
@@ -633,18 +619,14 @@ def test_event_ordering_stability():
     assert len(state.alive_manuscripts) == original_alive_count
 
     # 2. Test MaterialTransitionManager
-    material_manager = MaterialTransitionManager(
-        [{"start_tick": 0, "distribution": {"parchment": 1.0}}]
-    )
+    material_manager = MaterialTransitionManager([{"start_tick": 0, "distribution": {"parchment": 1.0}}])
     state_before = copy.deepcopy(state)
     _ = material_manager.get_material_for_tick(1, rng)
     assert state.tick == state_before.tick
     assert state.alive_manuscripts == state_before.alive_manuscripts
 
     # 3. Test ScriptTransitionManager
-    script_manager = ScriptTransitionManager(
-        [{"start_tick": 0, "distribution": {"uncial": 1.0}}]
-    )
+    script_manager = ScriptTransitionManager([{"start_tick": 0, "distribution": {"uncial": 1.0}}])
     state_before = copy.deepcopy(state)
     _ = script_manager.get_script_for_tick(1, rng)
     assert state.tick == state_before.tick

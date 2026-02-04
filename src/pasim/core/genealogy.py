@@ -184,17 +184,13 @@ def validate_genealogy(graph: GenealogyGraph) -> None:
         raise TypeError("Graph must be a networkx.DiGraph instance.")
 
     if not nx.is_directed_acyclic_graph(graph):
-        raise nx.NetworkXError(
-            "The genealogy graph must be a Directed Acyclic Graph (DAG)."
-        )
+        raise nx.NetworkXError("The genealogy graph must be a Directed Acyclic Graph (DAG).")
 
     required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
     for node_id, attrs in graph.nodes(data=True):
         missing_attrs = required_attrs - set(attrs.keys())
         if missing_attrs:
-            raise ValueError(
-                f"Node '{node_id}' is missing required attributes: {missing_attrs}"
-            )
+            raise ValueError(f"Node '{node_id}' is missing required attributes: {missing_attrs}")
 
 
 def get_parents(graph: GenealogyGraph, node_id: NodeID) -> List[NodeID]:

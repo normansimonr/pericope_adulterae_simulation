@@ -44,19 +44,17 @@ def manuscript_table(state: GenerationState) -> List[Dict[str, Any]]:
                 script = state.registries.witnesses.get(witness_id).script.value
             reputation = node_data.get("reputation")
 
-        table.append(
-            {
-                "manuscript_id": manuscript.manuscript_id,
-                "birth_tick": manuscript.birth_tick,
-                "death_tick": manuscript.death_tick,
-                "region": manuscript.region.value,
-                "location": manuscript.location,
-                "material": manuscript.material.value,
-                "script": script,
-                "reputation": reputation,
-                "alive": is_alive,
-            }
-        )
+        table.append({
+            "manuscript_id": manuscript.manuscript_id,
+            "birth_tick": manuscript.birth_tick,
+            "death_tick": manuscript.death_tick,
+            "region": manuscript.region.value,
+            "location": manuscript.location,
+            "material": manuscript.material.value,
+            "script": script,
+            "reputation": reputation,
+            "alive": is_alive,
+        })
     return table
 
 
@@ -88,17 +86,15 @@ def node_table(state: GenerationState) -> List[Dict[str, Any]]:
     """
     table = []
     for node_id, data in state.graph.nodes(data=True):
-        table.append(
-            {
-                "instance_id": node_id,
-                "manuscript_id": data.get("manuscript_id"),
-                "witness_id": data.get("witness_id"),
-                "birth_tick": data.get("birth_tick"),
-                "reputation": data.get("reputation"),
-                "parents": list(state.graph.predecessors(node_id)),
-                "children": list(state.graph.successors(node_id)),
-            }
-        )
+        table.append({
+            "instance_id": node_id,
+            "manuscript_id": data.get("manuscript_id"),
+            "witness_id": data.get("witness_id"),
+            "birth_tick": data.get("birth_tick"),
+            "reputation": data.get("reputation"),
+            "parents": list(state.graph.predecessors(node_id)),
+            "children": list(state.graph.successors(node_id)),
+        })
     return table
 
 

@@ -58,10 +58,7 @@ class MaterialTransitionManager:
             # If no schedule is provided, material assignment should fall back
             # to some default or be explicitly configured for a single choice.
             # For now, we raise an error to ensure configuration.
-            raise ValueError(
-                "Material transition schedule cannot be empty. "
-                "Provide at least one entry, e.g., for start_tick 0."
-            )
+            raise ValueError("Material transition schedule cannot be empty. " "Provide at least one entry, e.g., for start_tick 0.")
 
         # Sort the schedule by start_tick to ensure correct lookup
         self._schedule = sorted(schedule_configs, key=lambda x: x["start_tick"])
@@ -86,26 +83,20 @@ class MaterialTransitionManager:
                     )
 
                 if prob < 0:
-                    raise ValueError(
-                        f"Material probability for '{mat_str}' at tick {start_tick} is negative: {prob}."
-                    )
+                    raise ValueError(f"Material probability for '{mat_str}' at tick {start_tick} is negative: {prob}.")
 
                 materials_list.append(material_enum)
                 probabilities_list.append(prob)
                 total_prob += prob
 
             if not np.isclose(total_prob, 1.0):
-                raise ValueError(
-                    f"Material probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}."
-                )
+                raise ValueError(f"Material probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}.")
 
-            self._processed_schedule.append(
-                {
-                    "start_tick": start_tick,
-                    "materials": materials_list,
-                    "probabilities": probabilities_list,
-                }
-            )
+            self._processed_schedule.append({
+                "start_tick": start_tick,
+                "materials": materials_list,
+                "probabilities": probabilities_list,
+            })
 
     def get_material_for_tick(self, tick: int, rng: np.random.Generator) -> Material:
         """
@@ -132,7 +123,5 @@ class MaterialTransitionManager:
                 "Ensure a distribution with start_tick <= current_tick is always provided."
             )
 
-        sampled_material = rng.choice(
-            a=active_distribution["materials"], p=active_distribution["probabilities"]
-        )
+        sampled_material = rng.choice(a=active_distribution["materials"], p=active_distribution["probabilities"])
         return sampled_material

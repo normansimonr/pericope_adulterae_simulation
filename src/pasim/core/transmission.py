@@ -44,9 +44,7 @@ def copy_from_single_exemplar(parent_text: TaggedString) -> TaggedString:
     return parent_text.copy()
 
 
-def majority_from_exemplars(
-    parent_texts: List[TaggedString], rng: np.random.Generator
-) -> TaggedString:
+def majority_from_exemplars(parent_texts: List[TaggedString], rng: np.random.Generator) -> TaggedString:
     """
     Combines multiple exemplar tagged strings via segment-wise majority voting.
 

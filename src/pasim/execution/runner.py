@@ -62,9 +62,7 @@ def run_single(params_path: str, seed: int = 20240105) -> SimulationResult:
     """
     # 1. Validate path
     if "experiments/" not in params_path:
-        raise ValueError(
-            "Parameter file must be located in the 'experiments/' directory."
-        )
+        raise ValueError("Parameter file must be located in the 'experiments/' directory.")
     if not os.path.exists(params_path):
         raise FileNotFoundError(f"Parameter file not found at: {params_path}")
 

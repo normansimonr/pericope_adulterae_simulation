@@ -72,22 +72,15 @@ def select_exemplars(
         return []
 
     # 1. Geographical Filtering: Find 10 closest manuscripts
-    distances = [
-        (_euclidean_distance(new_manuscript.location, ms.location), ms)
-        for ms in alive_manuscripts_in_region
-    ]
+    distances = [(_euclidean_distance(new_manuscript.location, ms.location), ms) for ms in alive_manuscripts_in_region]
     distances.sort(key=lambda x: x[0])
     closest_manuscripts = [ms for _, ms in distances[:10]]
 
     # 2. Map manuscripts to witness instances
-    candidate_instances = [
-        manuscript_to_instance_map[ms.manuscript_id] for ms in closest_manuscripts
-    ]
+    candidate_instances = [manuscript_to_instance_map[ms.manuscript_id] for ms in closest_manuscripts]
 
     # 3. Reputation-based Ranking
-    candidate_instances.sort(
-        key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True
-    )
+    candidate_instances.sort(key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True)
 
     # 4. Determine number of exemplars
     n = rng.choice([1, 2, 3], p=[0.8, 0.1, 0.1])

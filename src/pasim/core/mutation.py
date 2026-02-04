@@ -66,16 +66,10 @@ def mutate_tagged_string(
           length.
     """
     if not (0.0 <= expected_proportion <= 1.0):
-        raise ValueError(
-            "Expected proportion must be between 0.0 and 1.0 (inclusive), "
-            f"but got {expected_proportion}."
-        )
+        raise ValueError("Expected proportion must be between 0.0 and 1.0 (inclusive), " f"but got {expected_proportion}.")
 
     if len(tagged_string) != config.text_length:
-        raise ValueError(
-            f"Tagged string must have length {config.text_length}, "
-            f"but got {len(tagged_string)}."
-        )
+        raise ValueError(f"Tagged string must have length {config.text_length}, " f"but got {len(tagged_string)}.")
 
     if expected_proportion == 0.0:
         return tagged_string.copy()

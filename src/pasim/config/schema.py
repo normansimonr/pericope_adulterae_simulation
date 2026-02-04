@@ -50,9 +50,7 @@ class PersecutionEventConfig(BaseModel):
         valid_regions = {r.value for r in Region}
         for region_name in v:
             if region_name not in valid_regions:
-                raise ValueError(
-                    f"Invalid region '{region_name}'. Must be one of {valid_regions}"
-                )
+                raise ValueError(f"Invalid region '{region_name}'. Must be one of {valid_regions}")
         return v
 
     @model_validator(mode="after")
@@ -77,13 +75,9 @@ class MaterialTransitionConfig(BaseModel):
         total_prob = 0.0
         for material_name, prob in v.items():
             if material_name not in valid_materials:
-                raise ValueError(
-                    f"Invalid material '{material_name}'. Must be one of {valid_materials}"
-                )
+                raise ValueError(f"Invalid material '{material_name}'. Must be one of {valid_materials}")
             if prob < 0:
-                raise ValueError(
-                    f"Probability for '{material_name}' cannot be negative."
-                )
+                raise ValueError(f"Probability for '{material_name}' cannot be negative.")
             total_prob += prob
 
         if not abs(total_prob - 1.0) < 1e-9:
@@ -105,9 +99,7 @@ class ScriptTransitionConfig(BaseModel):
         total_prob = 0.0
         for script_name, prob in v.items():
             if script_name not in valid_scripts:
-                raise ValueError(
-                    f"Invalid script '{script_name}'. Must be one of {valid_scripts}"
-                )
+                raise ValueError(f"Invalid script '{script_name}'. Must be one of {valid_scripts}")
             if prob < 0:
                 raise ValueError(f"Probability for '{script_name}' cannot be negative.")
             total_prob += prob
@@ -135,9 +127,7 @@ class DemandScheduleConfig(RootModel[Dict[int, Dict[Region, int]]]):
         for tick, demands_by_string_region in raw_data.items():
             if not isinstance(demands_by_string_region, dict):
                 # Pydantic will raise error later if not dict, but for cleaner error message:
-                raise ValueError(
-                    f"Demand value for tick {tick} must be a dictionary, got {type(demands_by_string_region)}"
-                )
+                raise ValueError(f"Demand value for tick {tick} must be a dictionary, got {type(demands_by_string_region)}")
 
             converted_demands = {}
             for region_name, count in demands_by_string_region.items():
@@ -156,19 +146,13 @@ class DemandScheduleConfig(RootModel[Dict[int, Dict[Region, int]]]):
         """Validates the demand schedule after region strings have been converted to enums."""
         for tick, demands in self.root.items():
             if not isinstance(tick, int) or tick < 0:
-                raise ValueError(
-                    f"Invalid tick '{tick}' in demand schedule. Must be a non-negative integer."
-                )
+                raise ValueError(f"Invalid tick '{tick}' in demand schedule. Must be a non-negative integer.")
             for (
                 region_enum,
                 count,
             ) in demands.items():  # Now region_enum is already a Region object
-                if not isinstance(
-                    region_enum, Region
-                ):  # Should not happen if 'before' validator works
-                    raise TypeError(
-                        f"Region key for tick {tick} is not a Region enum, got {type(region_enum)}"
-                    )
+                if not isinstance(region_enum, Region):  # Should not happen if 'before' validator works
+                    raise TypeError(f"Region key for tick {tick} is not a Region enum, got {type(region_enum)}")
                 if not isinstance(count, int) or count < 0:
                     raise ValueError(
                         f"Invalid demand count '{count}' for region '{region_enum.value}' at tick {tick}. Must be a non-negative integer."
@@ -197,9 +181,7 @@ class SimulationConfig(BaseModel):
         """Ensures start_ticks in transition schedules are strictly increasing."""
         for i in range(len(v) - 1):
             if v[i].start_tick >= v[i + 1].start_tick:
-                raise ValueError(
-                    "start_tick values in transition schedules must be strictly increasing."
-                )
+                raise ValueError("start_tick values in transition schedules must be strictly increasing.")
         return v
 
     @field_validator("reputation_distribution")
@@ -211,22 +193,16 @@ class SimulationConfig(BaseModel):
         """
         expected_keys = {1, 2, 3, 4, 5}
         if set(v.keys()) != expected_keys:
-            raise ValueError(
-                f"Reputation distribution keys must be 1-5, but got {set(v.keys())}"
-            )
+            raise ValueError(f"Reputation distribution keys must be 1-5, but got {set(v.keys())}")
 
         total_prob = 0.0
         for rep_score, prob in v.items():
             if not (0.0 <= prob <= 1.0):
-                raise ValueError(
-                    f"Reputation probability for score {rep_score} must be between 0.0 and 1.0, got {prob}"
-                )
+                raise ValueError(f"Reputation probability for score {rep_score} must be between 0.0 and 1.0, got {prob}")
             total_prob += prob
 
         if not abs(total_prob - 1.0) < 1e-9:
-            raise ValueError(
-                f"Reputation distribution probabilities must sum to 1.0, but got {total_prob}"
-            )
+            raise ValueError(f"Reputation distribution probabilities must sum to 1.0, but got {total_prob}")
         return v
 
 

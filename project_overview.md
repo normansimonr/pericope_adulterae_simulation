@@ -40,6 +40,24 @@ The simulation is designed to be fully parameter-driven, allowing researchers to
     2.  **Environmental Regimes** (e.g., `material_transitions`, `script_transitions`): Long-term, evolving environmental conditions that affect the properties of **newly created** entities. This is used to model gradual shifts in technology or culture.
     3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics, like the demand for new manuscripts over time. The demand schedule has special logic to handle missing ticks by using the last known value, ensuring continuity.
 
+## Dependency Management
+
+This project uses [Poetry](https://python-poetry.org/) for dependency management and packaging. Poetry helps to manage project dependencies in a more robust and reproducible way compared to traditional `pip` and `requirements.txt`.
+
+### Installation
+
+If you don't have Poetry installed, you can install it by following the instructions on the [official Poetry website](https://python-poetry.org/docs/#installation).
+
+### Installing Project Dependencies
+
+Once Poetry is installed, navigate to the project root directory and run the following command to install all project dependencies:
+
+```bash
+poetry install
+```
+
+This command will create a virtual environment (if one doesn't already exist) and install all the main and development dependencies specified in `pyproject.toml`.
+
 ## Execution
 
 The `pasim` framework provides a simple, in-memory execution pathway for running a single simulation and inspecting its results. This is useful for development, debugging, and single-run analysis.

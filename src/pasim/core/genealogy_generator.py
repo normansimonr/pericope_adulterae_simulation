@@ -81,11 +81,7 @@ def handle_deaths(state: GenerationState) -> GenerationState:
     current_tick = state.tick
     manuscript_registry = state.registries.manuscripts
 
-    dead_manuscripts = {
-        ms_id
-        for ms_id in state.alive_manuscripts
-        if manuscript_registry.get(ms_id).death_tick == current_tick
-    }
+    dead_manuscripts = {ms_id for ms_id in state.alive_manuscripts if manuscript_registry.get(ms_id).death_tick == current_tick}
 
     if dead_manuscripts:
         state.alive_manuscripts -= dead_manuscripts
@@ -203,9 +199,7 @@ def _spawn_new_manuscripts_from_demand(
                 location = generate_random_coordinates(region, rng)
                 reputation = sample_reputation(rng, params.reputation_distribution)
 
-                material = material_transition_manager.get_material_for_tick(
-                    current_tick, rng
-                )
+                material = material_transition_manager.get_material_for_tick(current_tick, rng)
 
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
@@ -229,9 +223,7 @@ def _spawn_new_manuscripts_from_demand(
                 # 3. Create Witness and WitnessInstance (Graph Node)
                 witness_id = f"W{next(state.witness_id_counter)}"
                 instance_id = f"I{next(state.witness_instance_id_counter)}"
-                script = script_transition_manager.get_script_for_tick(
-                    current_tick, rng
-                )
+                script = script_transition_manager.get_script_for_tick(current_tick, rng)
                 witness = Witness(
                     witness_id=witness_id,
                     manuscript_id=manuscript_id,
@@ -264,9 +256,7 @@ def _spawn_new_manuscripts_from_demand(
                         death_tick=None,  # Per design, node does not store death tick
                     )
                     # This is a copy, so generate its text from exemplars
-                    exemplar_texts = [
-                        state.registries.instance_texts[eid] for eid in exemplars
-                    ]
+                    exemplar_texts = [state.registries.instance_texts[eid] for eid in exemplars]
                     new_text = apply_scribal_rule(
                         exemplar_texts=exemplar_texts,
                         rng=rng,
@@ -335,13 +325,11 @@ def advance_tick(
     )
 
     # 5. Record telemetry
-    state.telemetry.append(
-        {
-            "tick": state.tick,
-            "alive_manuscripts": len(state.alive_manuscripts),
-            "total_manuscripts": len(state.registries.manuscripts),
-        }
-    )
+    state.telemetry.append({
+        "tick": state.tick,
+        "alive_manuscripts": len(state.alive_manuscripts),
+        "total_manuscripts": len(state.registries.manuscripts),
+    })
 
     return state
 
@@ -380,12 +368,8 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
 
     event_manager = HistoricalEventManager(event_configs)
 
-    material_transition_manager = MaterialTransitionManager(
-        [m.dict() for m in config.material_transitions]
-    )
-    script_transition_manager = ScriptTransitionManager(
-        [s.dict() for s in config.script_transitions]
-    )
+    material_transition_manager = MaterialTransitionManager([m.dict() for m in config.material_transitions])
+    script_transition_manager = ScriptTransitionManager([s.dict() for s in config.script_transitions])
 
     # 3. Run simulation loop
     for _ in range(config.total_ticks):

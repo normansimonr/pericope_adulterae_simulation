@@ -28,3 +28,13 @@ data/
 *.log
 *.tmp
 *.swp
+
+# Poetry
+.pdm.toml
+.pdm-python
+pdm.lock
+
+# Caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

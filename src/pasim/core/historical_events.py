@@ -65,9 +65,7 @@ class HistoricalEvent:
         Raises:
             NotImplementedError: If not implemented by a subclass.
         """
-        raise NotImplementedError(
-            "Each historical event must implement the 'apply' method."
-        )
+        raise NotImplementedError("Each historical event must implement the 'apply' method.")
 
     def is_active(self, tick: int) -> bool:
         """
@@ -103,10 +101,7 @@ class PersecutionEvent(HistoricalEvent):
 
     def __post_init__(self):
         if not (0.0 <= self.kill_proportion <= 1.0):
-            raise ValueError(
-                "kill_proportion must be between 0.0 and 1.0, "
-                f"but got {self.kill_proportion}"
-            )
+            raise ValueError("kill_proportion must be between 0.0 and 1.0, " f"but got {self.kill_proportion}")
 
     def apply(self, state: GenerationState, rng: np.random.Generator) -> None:
         """
@@ -176,20 +171,14 @@ class HistoricalEventManager:
         """
         events = [create_event_from_config(cfg.copy()) for cfg in event_configs or []]
 
-        self._events = sorted(
-            events, key=lambda e: (e.start_tick, e.__class__.__name__)
-        )
+        self._events = sorted(events, key=lambda e: (e.start_tick, e.__class__.__name__))
 
-    def apply_events_for_tick(
-        self, state: GenerationState, rng: np.random.Generator
-    ) -> None:
+    def apply_events_for_tick(self, state: GenerationState, rng: np.random.Generator) -> None:
         """
         Finds and applies all active historical events for the current tick.
         """
         current_tick = state.tick
-        active_events = [
-            event for event in self._events if event.is_active(current_tick)
-        ]
+        active_events = [event for event in self._events if event.is_active(current_tick)]
 
         for event in active_events:
             event.apply(state, rng)

@@ -31,15 +31,9 @@ class GenerationState:
     alive_manuscripts: set[str]
     manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
     # Counters for generating unique IDs
-    manuscript_id_counter: itertools.count = field(
-        default_factory=lambda: itertools.count(1)
-    )
-    witness_id_counter: itertools.count = field(
-        default_factory=lambda: itertools.count(1)
-    )
-    witness_instance_id_counter: itertools.count = field(
-        default_factory=lambda: itertools.count(1)
-    )
+    manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+    witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
+    witness_instance_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
     telemetry: list = field(default_factory=list)
 
 

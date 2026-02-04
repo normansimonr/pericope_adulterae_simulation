@@ -74,26 +74,20 @@ class ScriptTransitionManager:
                     )
 
                 if prob < 0:
-                    raise ValueError(
-                        f"Script probability for '{script_str}' at tick {start_tick} is negative: {prob}."
-                    )
+                    raise ValueError(f"Script probability for '{script_str}' at tick {start_tick} is negative: {prob}.")
 
                 scripts_list.append(script_enum)
                 probabilities_list.append(prob)
                 total_prob += prob
 
             if not np.isclose(total_prob, 1.0):
-                raise ValueError(
-                    f"Script probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}."
-                )
+                raise ValueError(f"Script probabilities at tick {start_tick} do not sum to 1.0. Got {total_prob}.")
 
-            self._processed_schedule.append(
-                {
-                    "start_tick": start_tick,
-                    "scripts": scripts_list,
-                    "probabilities": probabilities_list,
-                }
-            )
+            self._processed_schedule.append({
+                "start_tick": start_tick,
+                "scripts": scripts_list,
+                "probabilities": probabilities_list,
+            })
 
     def get_script_for_tick(self, tick: int, rng: np.random.Generator) -> Script:
         """
@@ -115,7 +109,5 @@ class ScriptTransitionManager:
         if active_distribution is None:
             raise RuntimeError(f"No active script distribution found for tick {tick}.")
 
-        sampled_script = rng.choice(
-            a=active_distribution["scripts"], p=active_distribution["probabilities"]
-        )
+        sampled_script = rng.choice(a=active_distribution["scripts"], p=active_distribution["probabilities"])
         return sampled_script

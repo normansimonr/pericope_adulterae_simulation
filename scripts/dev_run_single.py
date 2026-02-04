@@ -30,14 +30,10 @@ print(f"Graph edges: {result.graph.number_of_edges()}")
 print("-" * 20)
 print("Telemetry (first 3 ticks):")
 for record in result.state.telemetry[:3]:
-    print(
-        f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total"
-    )
+    print(f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total")
 print("Telemetry (last 3 ticks):")
 for record in result.state.telemetry[-3:]:
-    print(
-        f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total"
-    )
+    print(f"  - Tick {record['tick']}: {record['alive_manuscripts']} alive / {record['total_manuscripts']} total")
 print("--- End of Summary ---")
 
 

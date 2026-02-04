@@ -1,26 +1,36 @@
-[project]
+[tool.poetry]
 name = "pasim"
 version = "0.1.0"
 description = "A scientific simulation framework."
-authors = [{ name = "Your Name", email = "your@email.com" }]
-license = { file = "LICENSE" }
+authors = ["Your Name <your@email.com>"]
+license = "MIT"
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "numpy",
-    "networkx",
-    "pydantic",
-    "pyyaml",
-]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+numpy = "*"
+networkx = "*"
+pydantic = "*"
+pyyaml = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+mypy = "*"
+ruff = "*"
+pre-commit = "*"
+types-networkx = "*"
+types-pyyaml = "*"
 
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[project.optional-dependencies]
-test = [
-    "pytest",
-]
+[tool.ruff]
+line-length = 140
+preview = true
 
-[tool.isort]
-profile = "black"
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
