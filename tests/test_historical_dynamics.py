@@ -7,7 +7,7 @@ and reproducibly.
 
 import copy
 from collections import deque
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 from pasim.config.schema import (
@@ -33,11 +33,13 @@ def _create_initial_state(
     rng: np.random.Generator,
     manuscript_counts: Dict[Region, int],
     config: SimulationConfig,
+    state_collector_fixture: List[GenerationState],
     start_tick: int = 0,
     death_tick: int = 100,
 ) -> GenerationState:
     """Helper to create a generation state with a set number of manuscripts in specific regions."""
     state = initialise_generation_state()
+    state_collector_fixture.append(state)
     state.tick = start_tick
 
     for region, count in manuscript_counts.items():
@@ -81,7 +83,7 @@ def _create_initial_state(
     return state
 
 
-def test_persecution_correctness():
+def test_persecution_correctness(state_collector_fixture: List[GenerationState]):
     """Verify persecution event removes correct proportion of manuscripts from a targeted region."""
     rng_context = RNGContext(seed=123)
     rng = rng_context.spawn(1)[0]
@@ -99,7 +101,7 @@ def test_persecution_correctness():
 
     # 1. Initialize state with manuscripts in two regions
     initial_counts = {Region.EGYPT: 10, Region.ASIA_MINOR: 10}
-    state = _create_initial_state(rng, initial_counts, dummy_config)
+    state = _create_initial_state(rng, initial_counts, dummy_config, state_collector_fixture)
 
     total_manuscripts = sum(initial_counts.values())
     assert len(state.alive_manuscripts) == total_manuscripts
@@ -140,7 +142,7 @@ def test_persecution_correctness():
     assert state.graph.number_of_nodes() == total_manuscripts
 
 
-def test_persecution_determinism():
+def test_persecution_determinism(state_collector_fixture: List[GenerationState]):
     """Verify persecution events are deterministic with the same seed and different otherwise."""
     initial_counts = {Region.EGYPT: 50}
     event_config = {
@@ -165,7 +167,7 @@ def test_persecution_determinism():
     # --- Run 1 with seed 123 ---
     rng_context1 = RNGContext(seed=123)
     rng1 = rng_context1.spawn(1)[0]
-    state1 = _create_initial_state(rng1, initial_counts, dummy_config)
+    state1 = _create_initial_state(rng1, initial_counts, dummy_config, state_collector_fixture)
     initial_ids = {m for m in state1.alive_manuscripts}
 
     state1.tick = 1
@@ -175,7 +177,7 @@ def test_persecution_determinism():
     # --- Run 2 with seed 123 ---
     rng_context2 = RNGContext(seed=123)
     rng2 = rng_context2.spawn(1)[0]
-    state2 = _create_initial_state(rng2, initial_counts, dummy_config)
+    state2 = _create_initial_state(rng2, initial_counts, dummy_config, state_collector_fixture)
 
     state2.tick = 1
     event_manager.apply_events_for_tick(state2, rng2)
@@ -187,7 +189,7 @@ def test_persecution_determinism():
     # --- Run 3 with seed 456 ---
     rng_context3 = RNGContext(seed=456)
     rng3 = rng_context3.spawn(1)[0]
-    state3 = _create_initial_state(rng3, initial_counts, dummy_config)
+    state3 = _create_initial_state(rng3, initial_counts, dummy_config, state_collector_fixture)
 
     state3.tick = 1
     event_manager.apply_events_for_tick(state3, rng3)
@@ -197,7 +199,7 @@ def test_persecution_determinism():
     assert destroyed_ids1 != destroyed_ids3
 
 
-def test_material_transition():
+def test_material_transition(state_collector_fixture: List[GenerationState]):
     """Verify newly spawned manuscripts use materials based on the active schedule."""
     # 1. Define a 2-stage material transition schedule
     material_schedule = [
@@ -252,7 +254,7 @@ def test_material_transition():
     # 2. Setup simulation state
     rng_context = RNGContext(seed=42)
     rng = rng_context.spawn(1)[0]
-    state = _create_initial_state(rng, {Region.EGYPT: 1}, dummy_simulation_config)
+    state = _create_initial_state(rng, {Region.EGYPT: 1}, dummy_simulation_config, state_collector_fixture)
 
     # Capture initial manuscript to check it doesn't change
     initial_manuscript_id = list(state.alive_manuscripts)[0]
@@ -305,7 +307,7 @@ def test_material_transition():
     assert m_tick6.material == Material.PAPER
 
 
-def test_script_transition():
+def test_script_transition(state_collector_fixture: List[GenerationState]):
     """Verify newly spawned witnesses use scripts based on the active schedule."""
     # 1. Define a 2-stage script transition schedule
     script_schedule = [
@@ -354,7 +356,7 @@ def test_script_transition():
     # 2. Setup simulation state
     rng_context = RNGContext(seed=42)
     rng = rng_context.spawn(1)[0]
-    state = _create_initial_state(rng, {Region.EGYPT: 1}, dummy_simulation_config)
+    state = _create_initial_state(rng, {Region.EGYPT: 1}, dummy_simulation_config, state_collector_fixture)
 
     initial_witness_id = list(state.registries.witnesses.items())[0][0]
     initial_witness = state.registries.witnesses.get(initial_witness_id)
@@ -404,7 +406,7 @@ def test_script_transition():
     assert w_tick6.script == Script.MINUSCULE
 
 
-def test_demand_schedule():
+def test_demand_schedule(state_collector_fixture: List[GenerationState]):
     """Verify demand schedule correctly drives spawning and handles missing ticks."""
     # 1. Define demand schedule data and managers
     demand_schedule_data = {
@@ -451,7 +453,9 @@ def test_demand_schedule():
     # 3. Test spawning to meet demand
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]
-    state = _create_initial_state(rng, {Region.EGYPT: 2, Region.ASIA_MINOR: 1}, dummy_simulation_config)  # Start below demand
+    state = _create_initial_state(
+        rng, {Region.EGYPT: 2, Region.ASIA_MINOR: 1}, dummy_simulation_config, state_collector_fixture
+    )  # Start below demand
 
     # Run spawning at tick 5 (should use demand from tick 0)
     state.tick = 5
@@ -510,10 +514,10 @@ def test_demand_schedule():
     assert len(alive_asia_minor) == 3  # No new demand for Asia Minor, so no change
 
 
-def test_migration_determinism():
+def test_migration_determinism(state_collector_fixture: List[GenerationState]):
     """Verify manuscript migration is deterministic for a given seed."""
 
-    def run_migration_sim(seed: int) -> Dict[int, Dict[str, Region]]:
+    def run_migration_sim(seed: int, state_collector: List[GenerationState]) -> Dict[int, Dict[str, Region]]:
         """Run a few ticks of migration and return the history."""
         dummy_config = SimulationConfig(
             total_ticks=1,
@@ -526,7 +530,7 @@ def test_migration_determinism():
         )
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
-        state = _create_initial_state(rng, {Region.EGYPT: 10, Region.ASIA_MINOR: 10}, dummy_config)
+        state = _create_initial_state(rng, {Region.EGYPT: 10, Region.ASIA_MINOR: 10}, dummy_config, state_collector)
 
         history = {}
         for tick in range(1, 5):
@@ -538,20 +542,20 @@ def test_migration_determinism():
         return history
 
     # Run simulation twice with the same seed
-    history1 = run_migration_sim(seed=999)
-    history2 = run_migration_sim(seed=999)
+    history1 = run_migration_sim(seed=999, state_collector=state_collector_fixture)
+    history2 = run_migration_sim(seed=999, state_collector=state_collector_fixture)
 
     # Assert histories are identical
     assert history1 == history2
 
     # Run with a different seed
-    history3 = run_migration_sim(seed=111)
+    history3 = run_migration_sim(seed=111, state_collector=state_collector_fixture)
 
     # Assert history is different (it's probabilistically unlikely to be the same)
     assert history1 != history3
 
 
-def test_event_ordering_stability():
+def test_event_ordering_stability(state_collector_fixture: List[GenerationState]):
     """Ensure event application is stable regardless of config order."""
     event1 = {
         "event_type": "persecution",
@@ -576,10 +580,10 @@ def test_event_ordering_stability():
         demand_schedule=DemandScheduleConfig(root={0: {}}),
     )
 
-    def run_with_order(order: list, seed: int) -> set:
+    def run_with_order(order: list, seed: int, state_collector: List[GenerationState]) -> set:
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
-        state = _create_initial_state(rng, {Region.EGYPT: 100}, dummy_config)
+        state = _create_initial_state(rng, {Region.EGYPT: 100}, dummy_config, state_collector)
         initial_ids = {m for m in state.alive_manuscripts}
 
         event_manager = HistoricalEventManager(order)
@@ -591,8 +595,8 @@ def test_event_ordering_stability():
         return initial_ids - {m for m in state.alive_manuscripts}
 
     # Run with both orderings using the same seed
-    destroyed_ids1 = run_with_order([event1, event2], seed=77)
-    destroyed_ids2 = run_with_order([event2, event1], seed=77)
+    destroyed_ids1 = run_with_order([event1, event2], seed=77, state_collector=state_collector_fixture)
+    destroyed_ids2 = run_with_order([event2, event1], seed=77, state_collector=state_collector_fixture)
 
     # The set of destroyed manuscripts should be identical
     assert destroyed_ids1 == destroyed_ids2
@@ -607,7 +611,7 @@ def test_event_ordering_stability():
     )
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]
-    state = _create_initial_state(rng, {Region.EGYPT: 10}, dummy_config)
+    state = _create_initial_state(rng, {Region.EGYPT: 10}, dummy_config, state_collector_fixture)
     state.tick = 5
 
     # 1. Test HistoricalEventManager

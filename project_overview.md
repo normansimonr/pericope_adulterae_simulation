@@ -95,6 +95,33 @@ After a simulation has been run via `run_single`, the resulting `SimulationResul
 -   **`lineage_texts(state, leaf_instance_id)`**: Traces the ancestry of a given leaf node back to its root, returning the sequence of texts in chronological order. *(Note: As textual content is not yet stored, this currently returns a list of `None` placeholders).*
 -   **`to_networkx_copy(state)`**: Returns a full, deep copy of the `networkx.DiGraph` object, allowing for safe, independent analysis and manipulation.
 
+## Inspection
+
+After a simulation has been run via `run_single`, the resulting `SimulationResult` object can be passed to a suite of read-only helper functions in the `pasim.analysis.inspection` module. These functions provide convenient, high-level views of the simulation's state for debugging and analysis.
+
+-   **`manuscript_table(state)`**: Returns a list of dictionaries, each representing a manuscript with its complete properties, including its alive/dead status, script, and reputation.
+-   **`node_table(state)`**: Returns a list of dictionaries, each representing a node (witness instance) in the genealogy graph, including its ID, associated IDs, and its parent/child relationships.
+-   **`genealogy_edges(state)`**: Returns a simple list of `(parent, child)` tuples representing the edges of the genealogy graph.
+-   **`lineage_texts(state, leaf_instance_id)`**: Traces the ancestry of a given leaf node back to its root, returning the sequence of texts in chronological order. *(Note: As textual content is not yet stored, this currently returns a list of `None` placeholders).*
+-   **`to_networkx_copy(state)`**: Returns a full, deep copy of the `networkx.DiGraph` object, allowing for safe, independent analysis and manipulation.
+
+### Test-Time Text Visualization Layer
+
+To enhance debug observability during testing, the simulator includes a test-time text visualization layer. This utility allows developers to visually inspect how textual content (1D NumPy integer arrays) changes between parent and child witness instances during copying events.
+
+-   **Purpose**: Provides inline diff marking in the console for each parent-child copy event, making it easy to see where substitutions occurred and the extent of mutation. This is a debugging aid, not part of the core simulation logic or production output.
+-   **Functionality**:
+    -   Iterates over every edge in the simulation's `state.graph` (representing a parent → child copy).
+    -   Fetches the respective texts via `state.registries.instance_texts`.
+    -   Prints the parent and child instance IDs, their full text, and a `Diff` line with `^` markers indicating differing positions.
+    -   Automatically truncates long texts (over 120 tokens) to show the head and tail, while still marking differences within the visible sections.
+    -   Ensures deterministic output by sorting edges based on the child's birth tick.
+-   **Usage**: This feature is integrated directly into the test framework. To enable it, run pytest with the `--show-text-diffs` flag:
+    ```bash
+    poetry run pytest --show-text-diffs
+    ```
+    The visualization will automatically appear in the console after relevant tests have executed their simulations.
+
 ## Architecture and Structure
 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
