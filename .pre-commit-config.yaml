@@ -24,3 +24,12 @@ repos:
         args: [--no-strict-optional, --ignore-missing-imports, --disable-error-code=import-untyped]
         types: [python]
         files: \.py$
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest --show-text-diffs
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
