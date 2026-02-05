@@ -157,6 +157,43 @@ def _save_manuscripts(run_dir: Path, result: SimulationResult):
         json.dump(manuscripts_data, f, indent=2, cls=CustomJsonEncoder)
 
 
+def _save_instance_texts(run_dir: Path, result: SimulationResult):
+    """
+    Saves all instance texts in TSV format.
+    """
+    file_path = run_dir / "instance_texts.tsv"
+    with open(file_path, "w") as f:
+        if not result.state.registries.instance_texts:
+            return  # No texts to save
+
+        # Determine text length and generate header
+        first_instance_id = next(iter(result.state.registries.instance_texts))
+        text_length = len(result.state.registries.instance_texts[first_instance_id])
+        header = "instance_id\t" + "\t".join(f"token_{i}" for i in range(text_length))
+        f.write(header + "\n")
+
+        # Get instance IDs and their birth ticks, then sort
+        instance_birth_ticks = []
+        for node_id, data in result.graph.nodes(data=True):
+            instance_birth_ticks.append((node_id, data["birth_tick"]))
+        instance_birth_ticks.sort(key=lambda x: x[1])  # Sort by birth_tick
+
+        # Write texts in order
+        for instance_id, _ in instance_birth_ticks:
+            text_array = result.state.registries.instance_texts.get(instance_id)
+            if text_array is not None:
+                text_str = "\t".join(map(str, text_array.tolist()))
+                f.write(f"{instance_id}\t{text_str}\n")
+
+
+def _save_telemetry(run_dir: Path, result: SimulationResult):
+    """
+    Saves telemetry data to a JSON file.
+    """
+    with open(run_dir / "telemetry.json", "w") as f:
+        json.dump(result.state.telemetry, f, indent=2, cls=CustomJsonEncoder)
+
+
 def save_run(result: SimulationResult, params_path: str):
     """
     Public entry point to save the essential simulation output for reproducibility.
@@ -170,6 +207,8 @@ def save_run(result: SimulationResult, params_path: str):
 
     _save_config(run_dir, params_path_obj)
     _save_run_metadata(run_dir, result)
-    _save_genealogy(run_dir, result)  # New call
-    _save_instances(run_dir, result)  # New call
-    _save_manuscripts(run_dir, result)  # New call
+    _save_genealogy(run_dir, result)
+    _save_instances(run_dir, result)
+    _save_manuscripts(run_dir, result)
+    _save_instance_texts(run_dir, result)  # New call
+    _save_telemetry(run_dir, result)  # New call
