@@ -2,6 +2,7 @@ import json
 import shutil
 from enum import Enum
 from pathlib import Path
+from typing import List, cast
 
 import numpy as np
 import pydantic  # For Pydantic models
@@ -194,6 +195,43 @@ def _save_telemetry(run_dir: Path, result: SimulationResult):
         json.dump(result.state.telemetry, f, indent=2, cls=CustomJsonEncoder)
 
 
+def _save_events_log(run_dir: Path, result: SimulationResult):
+    """
+    Generates and saves a chronological log of key simulation events.
+    Infers events from existing data in SimulationResult.
+    """
+    events = []
+
+    # Infer manuscript birth and death events
+    for ms_id, manuscript in result.state.registries.manuscripts.items():
+        events.append({"tick": manuscript.birth_tick, "type": "manuscript_birth", "id": ms_id})
+        if manuscript.death_tick is not None and manuscript.death_tick != float("inf"):  # check for infinity
+            events.append({"tick": manuscript.death_tick, "type": "manuscript_death", "id": ms_id})
+
+    # Infer instance birth events (from graph nodes)
+    for node_id, data in result.graph.nodes(data=True):
+        parents = list(result.graph.predecessors(node_id))
+        event_info = {"tick": data["birth_tick"], "type": "instance_birth", "id": node_id, "parents": parents}
+        events.append(event_info)
+
+    # Sort events chronologically
+    # Stable sort by tick, then by event type for consistent order
+    events.sort(key=lambda x: (x["tick"], x["type"]))
+
+    with open(run_dir / "events.log", "w") as f:
+        for event in events:
+            if event["type"] == "manuscript_birth":
+                f.write(f"[TICK {event['tick']}] Manuscript {event['id']} created\n")
+            elif event["type"] == "manuscript_death":
+                f.write(f"[TICK {event['tick']}] Manuscript {event['id']} died\n")
+            elif event["type"] == "instance_birth":
+                if event["parents"]:
+                    parent_info = ", ".join(map(str, cast(List[str], event["parents"])))
+                    f.write(f"[TICK {event['tick']}] Instance {event['id']} created from {parent_info}\n")
+                else:
+                    f.write(f"[TICK {event['tick']}] Instance {event['id']} created (autograph)\n")
+
+
 def save_run(result: SimulationResult, params_path: str):
     """
     Public entry point to save the essential simulation output for reproducibility.
@@ -210,5 +248,6 @@ def save_run(result: SimulationResult, params_path: str):
     _save_genealogy(run_dir, result)
     _save_instances(run_dir, result)
     _save_manuscripts(run_dir, result)
-    _save_instance_texts(run_dir, result)  # New call
-    _save_telemetry(run_dir, result)  # New call
+    _save_instance_texts(run_dir, result)
+    _save_telemetry(run_dir, result)
+    _save_events_log(run_dir, result)  # New call
