@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import pydantic  # For Pydantic models
 
+from pasim.execution.runner import SimulationResult  # For accessing simulation results
+
 
 class CustomJsonEncoder(json.JSONEncoder):
     """
@@ -70,3 +72,51 @@ def _resolve_run_directory(params_path: Path) -> Path:
     run_dir.mkdir(parents=True)
 
     return run_dir
+
+
+def _save_config(run_dir: Path, params_path: Path):
+    """
+    Saves a copy of the input config file to the run directory.
+    """
+    shutil.copy(params_path, run_dir / "config.yaml")
+
+
+def _save_run_metadata(run_dir: Path, result: SimulationResult):
+    """
+    Saves high-level simulation metadata to a JSON file.
+    """
+    graph = result.graph
+    num_nodes = graph.number_of_nodes()
+    num_edges = graph.number_of_edges()
+
+    # Total manuscripts: all ever created, regardless of death
+    # Accessing .manuscripts directly from the StateRegistry
+    total_manuscripts = len(result.state.registries.manuscripts)
+    # Total instances: all nodes in the genealogy graph
+    total_instances = num_nodes
+
+    metadata = {
+        "seed": result.seed,
+        "final_tick": result.state.tick,
+        "total_instances": total_instances,
+        "total_manuscripts": total_manuscripts,
+        "graph_nodes": num_nodes,
+        "graph_edges": num_edges,
+    }
+    with open(run_dir / "run_metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2, cls=CustomJsonEncoder)
+
+
+def save_run(result: SimulationResult, params_path: str):
+    """
+    Public entry point to save the essential simulation output for reproducibility.
+
+    Args:
+        result: The SimulationResult object containing all simulation outputs.
+        params_path: The path to the original parameters file.
+    """
+    params_path_obj = Path(params_path)
+    run_dir = _resolve_run_directory(params_path_obj)
+
+    _save_config(run_dir, params_path_obj)
+    _save_run_metadata(run_dir, result)

@@ -15,6 +15,7 @@ from pasim.config.schema import SimulationConfig
 from pasim.core.genealogy_generator import run_genealogy_generator
 from pasim.core.rng import RNGContext
 from pasim.core.simulation_state import GenerationState
+from pasim.io.persistence import save_run  # Import the new persistence function
 
 
 @dataclass
@@ -80,9 +81,14 @@ def run_single(params_path: str, seed: int = 20240105) -> SimulationResult:
     state = run_genealogy_generator(parameters=params_dict, rng=rng)
 
     # 6. Return structured result
-    return SimulationResult(
+    result = SimulationResult(
         state=state,
         graph=state.graph,
         config=config,
         seed=seed,
     )
+
+    # Save the run results using the persistence layer
+    save_run(result, params_path)
+
+    return result
