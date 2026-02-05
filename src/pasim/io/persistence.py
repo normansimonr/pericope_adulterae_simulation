@@ -107,6 +107,56 @@ def _save_run_metadata(run_dir: Path, result: SimulationResult):
         json.dump(metadata, f, indent=2, cls=CustomJsonEncoder)
 
 
+def _save_genealogy(run_dir: Path, result: SimulationResult):
+    """
+    Saves genealogy nodes and edges to a JSON file.
+    """
+    nodes_data = []
+    for node_id, data in result.graph.nodes(data=True):
+        nodes_data.append({
+            "instance_id": node_id,
+            "manuscript_id": data["manuscript_id"],
+            "birth_tick": data["birth_tick"],
+            "reputation": data["reputation"],
+        })
+
+    edges_data = []
+    for u, v in result.graph.edges():
+        edges_data.append({"parent": u, "child": v})
+
+    genealogy = {"nodes": nodes_data, "edges": edges_data}
+    with open(run_dir / "genealogy.json", "w") as f:
+        json.dump(genealogy, f, indent=2, cls=CustomJsonEncoder)
+
+
+def _save_instances(run_dir: Path, result: SimulationResult):
+    """
+    Saves all witness instance metadata to a JSON file.
+    """
+    instances_data = []
+    for node_id, data in result.graph.nodes(data=True):
+        instances_data.append({
+            "instance_id": node_id,
+            "manuscript_id": data["manuscript_id"],
+            "witness_id": data["witness_id"],
+            "birth_tick": data["birth_tick"],
+            "reputation": data["reputation"],
+        })
+    with open(run_dir / "instances.json", "w") as f:
+        json.dump(instances_data, f, indent=2, cls=CustomJsonEncoder)
+
+
+def _save_manuscripts(run_dir: Path, result: SimulationResult):
+    """
+    Saves the full manuscript registry to a JSON file.
+    """
+    manuscripts_data = []
+    for _, manuscript in result.state.registries.manuscripts.items():
+        manuscripts_data.append(manuscript)  # CustomJsonEncoder handles Pydantic models
+    with open(run_dir / "manuscripts.json", "w") as f:
+        json.dump(manuscripts_data, f, indent=2, cls=CustomJsonEncoder)
+
+
 def save_run(result: SimulationResult, params_path: str):
     """
     Public entry point to save the essential simulation output for reproducibility.
@@ -120,3 +170,6 @@ def save_run(result: SimulationResult, params_path: str):
 
     _save_config(run_dir, params_path_obj)
     _save_run_metadata(run_dir, result)
+    _save_genealogy(run_dir, result)  # New call
+    _save_instances(run_dir, result)  # New call
+    _save_manuscripts(run_dir, result)  # New call
