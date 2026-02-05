@@ -1,13 +1,15 @@
+import dataclasses  # For handling dataclasses
 import json
 import shutil
 from enum import Enum
 from pathlib import Path
-from typing import List, cast
+from typing import TYPE_CHECKING, List, cast  # Added TYPE_CHECKING
 
 import numpy as np
 import pydantic  # For Pydantic models
 
-from pasim.execution.runner import SimulationResult  # For accessing simulation results
+if TYPE_CHECKING:  # Added conditional import
+    from pasim.execution.runner import SimulationResult
 
 
 class CustomJsonEncoder(json.JSONEncoder):
@@ -25,6 +27,8 @@ class CustomJsonEncoder(json.JSONEncoder):
             return obj.item()
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if dataclasses.is_dataclass(obj):
+            return dataclasses.asdict(obj)
         # Handle Pydantic models (v2 prefers model_dump, v1 uses dict())
         if isinstance(obj, pydantic.BaseModel):
             if hasattr(obj, "model_dump"):  # Pydantic v2
@@ -82,7 +86,7 @@ def _save_config(run_dir: Path, params_path: Path):
     shutil.copy(params_path, run_dir / "config.yaml")
 
 
-def _save_run_metadata(run_dir: Path, result: SimulationResult):
+def _save_run_metadata(run_dir: Path, result: "SimulationResult"):
     """
     Saves high-level simulation metadata to a JSON file.
     """
@@ -108,7 +112,7 @@ def _save_run_metadata(run_dir: Path, result: SimulationResult):
         json.dump(metadata, f, indent=2, cls=CustomJsonEncoder)
 
 
-def _save_genealogy(run_dir: Path, result: SimulationResult):
+def _save_genealogy(run_dir: Path, result: "SimulationResult"):
     """
     Saves genealogy nodes and edges to a JSON file.
     """
@@ -130,7 +134,7 @@ def _save_genealogy(run_dir: Path, result: SimulationResult):
         json.dump(genealogy, f, indent=2, cls=CustomJsonEncoder)
 
 
-def _save_instances(run_dir: Path, result: SimulationResult):
+def _save_instances(run_dir: Path, result: "SimulationResult"):
     """
     Saves all witness instance metadata to a JSON file.
     """
@@ -147,7 +151,7 @@ def _save_instances(run_dir: Path, result: SimulationResult):
         json.dump(instances_data, f, indent=2, cls=CustomJsonEncoder)
 
 
-def _save_manuscripts(run_dir: Path, result: SimulationResult):
+def _save_manuscripts(run_dir: Path, result: "SimulationResult"):
     """
     Saves the full manuscript registry to a JSON file.
     """
@@ -158,7 +162,7 @@ def _save_manuscripts(run_dir: Path, result: SimulationResult):
         json.dump(manuscripts_data, f, indent=2, cls=CustomJsonEncoder)
 
 
-def _save_instance_texts(run_dir: Path, result: SimulationResult):
+def _save_instance_texts(run_dir: Path, result: "SimulationResult"):
     """
     Saves all instance texts in TSV format.
     """
@@ -187,7 +191,7 @@ def _save_instance_texts(run_dir: Path, result: SimulationResult):
                 f.write(f"{instance_id}\t{text_str}\n")
 
 
-def _save_telemetry(run_dir: Path, result: SimulationResult):
+def _save_telemetry(run_dir: Path, result: "SimulationResult"):
     """
     Saves telemetry data to a JSON file.
     """
@@ -195,7 +199,7 @@ def _save_telemetry(run_dir: Path, result: SimulationResult):
         json.dump(result.state.telemetry, f, indent=2, cls=CustomJsonEncoder)
 
 
-def _save_events_log(run_dir: Path, result: SimulationResult):
+def _save_events_log(run_dir: Path, result: "SimulationResult"):
     """
     Generates and saves a chronological log of key simulation events.
     Infers events from existing data in SimulationResult.
@@ -232,7 +236,7 @@ def _save_events_log(run_dir: Path, result: SimulationResult):
                     f.write(f"[TICK {event['tick']}] Instance {event['id']} created (autograph)\n")
 
 
-def save_run(result: SimulationResult, params_path: str):
+def save_run(result: "SimulationResult", params_path: str):
     """
     Public entry point to save the essential simulation output for reproducibility.
 
