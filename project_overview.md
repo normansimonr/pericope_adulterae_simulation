@@ -122,6 +122,20 @@ To enhance debug observability during testing, the simulator includes a test-tim
     ```
     The visualization will automatically appear in the console after relevant tests have executed their simulations.
 
+## Research Data Persistence
+
+To facilitate rigorous academic analysis and ensure full reproducibility, the `pasim` framework includes a comprehensive research-grade persistence layer. Every execution of `run_single()` automatically generates a unique, timestamped run directory (`experiments/<experiment_name>/runs/<run_number>/`) containing a complete snapshot of the simulation's output.
+
+This persistence layer saves all critical simulation artifacts as structured, human-readable plain text files, enabling researchers to:
+
+-   **Reconstruct any experiment**: By saving the exact `config.yaml` used for the run.
+-   **Trace the full textual genealogy**: Through `genealogy.json` (graph structure) and `instances.json` (witness instance metadata).
+-   **Inspect manuscript lifecycles**: Using `manuscripts.json` (full manuscript registry).
+-   **Analyze textual evolution**: With `instance_texts.tsv` providing the complete content of every generated text.
+-   **Monitor simulation dynamics**: Via `telemetry.json` (per-tick metrics) and `events.log` (chronological log of key simulation events).
+
+This ensures that all simulation results are fully transparent, auditable, and ready for publication.
+
 ## Architecture and Structure
 
 The project `pasim` is designed as a modular framework, providing a structured approach to building and running scientific simulations. The core components are organized within the `src/pasim` directory, with distinct responsibilities:
@@ -167,6 +181,15 @@ This core distinction—shocks that alter existing state versus environments tha
     -   `plots.py`: For generating visualizations of results.
     -   `statistics.py`: For statistical analysis of simulation outputs.
 -   **`io/`**: Manages input and output operations, including reading initial data and writing simulation results.
+    -   `persistence.py`: Provides a research-grade persistence layer for saving complete simulation outputs. For every `run_single()` execution, it creates a unique run directory under `experiments/<experiment_name>/runs/<run_number>/` and saves the following artifacts:
+        -   `config.yaml`: An exact copy of the input configuration file.
+        -   `run_metadata.json`: High-level metadata about the run (seed, final tick, total instances/manuscripts, graph nodes/edges).
+        -   `genealogy.json`: The complete genealogy graph structure (nodes with instance_id, manuscript_id, birth_tick, reputation; and edges with parent/child relationships).
+        -   `instances.json`: Detailed metadata for all witness instances.
+        -   `manuscripts.json`: Full details of all manuscripts, including their physical attributes.
+        -   `instance_texts.tsv`: A tab-separated file containing the textual content of all witness instances, ordered by birth_tick, ensuring streaming writes for large datasets.
+        -   `telemetry.json`: The raw telemetry log from the simulation.
+        -   `events.log`: A chronological plain-text log of key simulation events (manuscript creation/death, instance creation with parent info).
     -   `formats.py`: For handling different data formats.
     -   `output.py`: For writing simulation outputs.
     -   `aggregation.py`: For aggregating results from multiple runs.
