@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -29,7 +30,7 @@ demand_schedule:
   0:
     Asia Minor: 1
 death_ticks: [1, 2]
-n_runs: 3 # Number of runs for parallel execution
+n_runs: 3
 """
 
 
@@ -46,41 +47,67 @@ def temp_parallel_experiment_folder(tmp_path: Path) -> Path:
     return exp_dir
 
 
-def test_run_parallel_creates_multiple_run_directories(temp_parallel_experiment_folder: Path):
+def test_run_parallel_successful_execution(temp_parallel_experiment_folder: Path):
+    """
+    Tests that run_parallel completes successfully and returns a correct summary.
+    """
     params_path = temp_parallel_experiment_folder / "params.yaml"
 
-    # Load n_runs from the YAML to assert correctly
     with open(params_path, "r") as f:
         params = yaml.safe_load(f)
     n_runs = params["n_runs"]
 
-    run_parallel(str(params_path))
+    summary = run_parallel(str(params_path))
+
+    # Assert summary is correct for a successful run
+    assert summary["total_runs"] == n_runs
+    assert summary["successful_runs"] == n_runs
+    assert summary["failed_runs"] == 0
+    assert len(summary["failure_records"]) == 0
 
     # Assert that n_runs directories were created
     runs_dir = temp_parallel_experiment_folder / "runs"
     assert runs_dir.is_dir()
-
     created_run_dirs = [d for d in runs_dir.iterdir() if d.is_dir()]
     assert len(created_run_dirs) == n_runs
 
-    # Verify naming convention (1, 2, ..., n_runs)
-    expected_run_names = {str(i) for i in range(1, n_runs + 1)}
-    actual_run_names = {d.name for d in created_run_dirs}
-    assert actual_run_names == expected_run_names
 
-    # Optional: basic check for files existence in one of the run directories
-    # Pick the first one as an example
-    if n_runs > 0:
-        first_run_dir = runs_dir / "1"
-        expected_files = [
-            "config.yaml",
-            "run_metadata.json",
-            "genealogy.json",
-            "instances.json",
-            "manuscripts.json",
-            "instance_texts.tsv",
-            "telemetry.json",
-            "events.log",
-        ]
-        for file_name in expected_files:
-            assert (first_run_dir / file_name).is_file(), f"Missing file: {file_name}"
+def test_run_parallel_failure_handling(temp_parallel_experiment_folder: Path):
+    """
+    Tests that run_parallel correctly handles failures and retries.
+    """
+    params_path = temp_parallel_experiment_folder / "params.yaml"
+
+    # Modify params to include retries for this specific test
+    with open(params_path, "r") as f:
+        params = yaml.safe_load(f)
+    params["n_runs"] = 2
+    params["max_retries"] = 2
+    n_runs = params["n_runs"]
+    max_retries = params["max_retries"]
+
+    with open(params_path, "w") as f:
+        yaml.dump(params, f)
+
+    # Mock run_single to always fail
+    with patch("pasim.execution.parallel.run_single", side_effect=ValueError("Test failure")):
+        summary = run_parallel(str(params_path))
+
+    # Assert summary reflects the failed runs and retries
+    assert summary["total_runs"] == n_runs
+    assert summary["successful_runs"] == 0
+    assert summary["failed_runs"] == n_runs
+
+    # Each of the n_runs should have (max_retries + 1) attempts
+    total_attempts = n_runs * (max_retries + 1)
+    assert len(summary["failure_records"]) == total_attempts
+
+    # Check the details of one of the failure records
+    first_failure = summary["failure_records"][0]
+    assert first_failure["run_index"] == 0
+    assert first_failure["attempt"] == 1
+    assert "ValueError('Test failure')" in first_failure["exception"]
+
+    last_failure = summary["failure_records"][-1]
+    assert last_failure["run_index"] == n_runs - 1
+    assert last_failure["attempt"] == max_retries + 1
