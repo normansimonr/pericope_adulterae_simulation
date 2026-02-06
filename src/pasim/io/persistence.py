@@ -1,6 +1,7 @@
 import dataclasses  # For handling dataclasses
 import json
 import shutil
+import time  # Import time for a small backoff
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, List, cast  # Added TYPE_CHECKING
@@ -38,45 +39,53 @@ class CustomJsonEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+# ... (rest of the file remains the same until _resolve_run_directory) ...
+
+
 def _resolve_run_directory(params_path: Path) -> Path:
     """
-    Determines the next run directory path and ensures its existence.
+    Determines a unique run directory path and ensures its existence.
+    Robustly handles concurrent calls from parallel processes.
 
-    Given a params_path like 'experiments/exp001_baseline/params.yaml',
-    it will create a directory like 'experiments/exp001_baseline/runs/<run_id>/'.
+    Given a params_path like 'experiments/exp000_baseline/params.yaml',
+    it will create a directory like 'experiments/exp000_baseline/runs/<run_id>/'.
 
     Args:
         params_path: Path to the experiment's parameters file.
 
     Returns:
-        The Path to the newly created (or re-created) run directory.
+        The Path to the newly created unique run directory.
     """
     experiment_dir = params_path.parent
     runs_dir = experiment_dir / "runs"
-    runs_dir.mkdir(parents=True, exist_ok=True)
+    runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure parent 'runs' directory exists
 
-    existing_run_numbers = []
-    for item in runs_dir.iterdir():
-        if item.is_dir():
-            try:
-                # Attempt to convert folder name to an integer
-                existing_run_numbers.append(int(item.name))
-            except ValueError:
-                # Ignore folders that are not integers
-                continue
+    # Implement a retry loop to find a unique run number in a concurrent-safe way
+    max_retries = 10
+    for _ in range(max_retries):
+        existing_run_numbers = []
+        for item in runs_dir.iterdir():
+            if item.is_dir():
+                try:
+                    existing_run_numbers.append(int(item.name))
+                except ValueError:
+                    continue  # Ignore non-integer named directories
 
-    next_run_number = 1
-    if existing_run_numbers:
-        next_run_number = max(existing_run_numbers) + 1
+        next_run_number = 1
+        if existing_run_numbers:
+            next_run_number = max(existing_run_numbers) + 1
 
-    run_dir = runs_dir / str(next_run_number)
+        run_dir = runs_dir / str(next_run_number)
 
-    # If the directory already exists, delete it completely and recreate it
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True)
+        try:
+            run_dir.mkdir(parents=True)  # Attempt to create the directory exclusively
+            return run_dir  # Success! Return the unique directory
+        except FileExistsError:
+            # Directory was created by another process concurrently.
+            # Loop again to find the next available number.
+            time.sleep(0.01)  # Small backoff to reduce contention
 
-    return run_dir
+    raise RuntimeError(f"Failed to create a unique run directory after {max_retries} retries in {runs_dir}")
 
 
 def _save_config(run_dir: Path, params_path: Path):
