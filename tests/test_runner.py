@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from pasim.execution.orchestrator import run_experiment
 from pasim.execution.parallel import run_parallel
 
 # Minimal configuration for fast testing of parallel runs
@@ -111,3 +112,30 @@ def test_run_parallel_failure_handling(temp_parallel_experiment_folder: Path):
     last_failure = summary["failure_records"][-1]
     assert last_failure["run_index"] == n_runs - 1
     assert last_failure["attempt"] == max_retries + 1
+
+
+# Test for the new run_experiment entrypoint
+def test_run_experiment_successful_execution(temp_parallel_experiment_folder: Path):
+    """
+    Tests that run_experiment orchestrates parallel runs successfully and returns a correct summary.
+    """
+    params_path = temp_parallel_experiment_folder / "params.yaml"
+
+    with open(params_path, "r") as f:
+        params = yaml.safe_load(f)
+    n_runs = params["n_runs"]
+
+    # Call run_experiment, which internally uses run_parallel
+    summary = run_experiment(str(params_path))
+
+    # Assert summary is correct for a successful experiment
+    assert summary["total_runs"] == n_runs
+    assert summary["successful_runs"] == n_runs
+    assert summary["failed_runs"] == 0
+    assert len(summary["failure_records"]) == 0
+
+    # Assert that n_runs directories were created by the underlying parallel execution
+    runs_dir = temp_parallel_experiment_folder / "runs"
+    assert runs_dir.is_dir()
+    created_run_dirs = [d for d in runs_dir.iterdir() if d.is_dir()]
+    assert len(created_run_dirs) == n_runs
