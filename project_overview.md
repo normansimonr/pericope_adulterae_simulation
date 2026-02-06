@@ -230,6 +230,20 @@ These tests guarantee that historical dynamics are deterministic, parameter-driv
 
 These tests are crucial for ensuring the scientific validity and reproducibility of the simulation, providing confidence that the results are a direct consequence of the configured parameters and not artifacts of implementation errors.
 
+### `tests/test_persistence.py`
+
+This module contains a comprehensive test suite for the research data persistence layer, ensuring its correctness, determinism, and integrity. These tests validate that:
+
+-   Run directories are created correctly, following a numbered sequence (e.g., `1`, `2`, `3`).
+-   All required output files (`config.yaml`, `run_metadata.json`, `genealogy.json`, `instances.json`, `manuscripts.json`, `instance_texts.tsv`, `telemetry.json`, `events.log`) are present after a simulation run.
+-   The contents of `run_metadata.json` are consistent with the simulation's `SimulationResult` object (seed, graph nodes/edges, total instances/manuscripts, final tick).
+-   The `genealogy.json` file accurately reflects the in-memory genealogy graph in terms of node and edge counts, and references valid node IDs.
+-   `instance_texts.tsv` correctly stores textual data, with an appropriate header, the correct number of rows, integer tokens, and content matching in-memory NumPy arrays for selected instances.
+-   `telemetry.json` precisely matches the in-memory telemetry data from the simulation.
+-   `events.log` contains comprehensive coverage of key simulation events, including instance births, manuscript births, and manuscript deaths.
+-   The persistence process itself does not mutate the in-memory simulation state, ensuring data integrity before and after saving.
+
+
 ## Detailed Module and File Summaries
 
 ### `src/pasim/__init__.py`
