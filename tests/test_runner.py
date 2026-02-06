@@ -1,3 +1,5 @@
+import json  # New import for json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -32,6 +34,7 @@ demand_schedule:
     Asia Minor: 1
 death_ticks: [1, 2]
 n_runs: 3
+max_retries: 1 # Add max_retries for testing
 """
 
 
@@ -118,14 +121,16 @@ def test_run_parallel_failure_handling(temp_parallel_experiment_folder: Path):
 def test_run_experiment_successful_execution(temp_parallel_experiment_folder: Path):
     """
     Tests that run_experiment orchestrates parallel runs successfully and returns a correct summary.
+    Also verifies experiment metadata.
     """
     params_path = temp_parallel_experiment_folder / "params.yaml"
 
     with open(params_path, "r") as f:
         params = yaml.safe_load(f)
     n_runs = params["n_runs"]
+    max_retries = params["max_retries"]  # Should be 1 from MINIMAL_PARALLEL_PARAMS_YAML
+    base_seed = params.get("seed")  # Should be None
 
-    # Call run_experiment, which internally uses run_parallel
     summary = run_experiment(str(params_path))
 
     # Assert summary is correct for a successful experiment
@@ -134,8 +139,97 @@ def test_run_experiment_successful_execution(temp_parallel_experiment_folder: Pa
     assert summary["failed_runs"] == 0
     assert len(summary["failure_records"]) == 0
 
-    # Assert that n_runs directories were created by the underlying parallel execution
-    runs_dir = temp_parallel_experiment_folder / "runs"
-    assert runs_dir.is_dir()
-    created_run_dirs = [d for d in runs_dir.iterdir() if d.is_dir()]
-    assert len(created_run_dirs) == n_runs
+    # Assert experiment_metadata.json exists and is correct
+    metadata_path = temp_parallel_experiment_folder / "experiment_metadata.json"
+    assert metadata_path.is_file()
+    with open(metadata_path, "r") as f:
+        metadata = json.load(f)
+
+    assert metadata["experiment_id"] == temp_parallel_experiment_folder.name
+    assert metadata["params_path"] == params_path.name
+    assert metadata["total_requested_runs"] == n_runs
+    assert metadata["parallelism_level_used"] == os.cpu_count() or 1
+    assert metadata["retry_policy"] == max_retries
+    assert metadata["seed"] == base_seed
+    assert metadata["execution_status"] == "completed"
+    assert metadata["start_timestamp"] is not None
+    assert metadata["end_timestamp"] is not None
+    assert metadata["run_counts"]["successful"] == n_runs
+    assert metadata["run_counts"]["failed"] == 0
+    assert metadata["run_counts"]["retried"] == 0
+    assert metadata["summary"] == summary
+
+
+def test_run_experiment_failure_metadata(temp_parallel_experiment_folder: Path):
+    """
+    Tests that run_experiment correctly records metadata for an experiment with run-level failures.
+    """
+    params_path = temp_parallel_experiment_folder / "params.yaml"
+
+    # Modify params to include retries for this specific test
+    with open(params_path, "r") as f:
+        params = yaml.safe_load(f)
+    params["n_runs"] = 2
+    params["max_retries"] = 1  # 1 retry, so 2 attempts per run
+    n_runs = params["n_runs"]
+    max_retries = params["max_retries"]
+
+    with open(params_path, "w") as f:
+        yaml.dump(params, f)
+
+    # Mock _run_single_with_retry to always fail
+    with patch("pasim.execution.parallel.run_single", side_effect=ValueError("Run failure")):
+        summary = run_experiment(str(params_path))
+
+    # Assert summary reflects the failed runs
+    assert summary["total_runs"] == n_runs
+    assert summary["successful_runs"] == 0
+    assert summary["failed_runs"] == n_runs
+    assert len(summary["failure_records"]) == n_runs * (max_retries + 1)
+
+    # Assert experiment_metadata.json exists and is correct for failures
+    metadata_path = temp_parallel_experiment_folder / "experiment_metadata.json"
+    assert metadata_path.is_file()
+    with open(metadata_path, "r") as f:
+        metadata = json.load(f)
+
+    assert metadata["experiment_id"] == temp_parallel_experiment_folder.name
+    assert metadata["execution_status"] == "completed_with_failures"
+    assert metadata["start_timestamp"] is not None
+    assert metadata["end_timestamp"] is not None
+    assert metadata["run_counts"]["successful"] == 0
+    assert metadata["run_counts"]["failed"] == n_runs
+    assert metadata["run_counts"]["retried"] == n_runs * max_retries  # 2 runs * 1 retry
+
+
+def test_run_experiment_catastrophic_failure_metadata(temp_parallel_experiment_folder: Path):
+    """
+    Tests that run_experiment correctly records metadata for catastrophic errors
+    (e.g., during parameter parsing or before parallel execution starts).
+    """
+    params_path = temp_parallel_experiment_folder / "params.yaml"
+
+    # Corrupt the params file to cause a catastrophic failure during parsing
+    with open(params_path, "w") as f:
+        f.write("invalid yaml: -")
+
+    # Expect a ValueError to be raised by run_experiment due to bad YAML
+    with pytest.raises(yaml.YAMLError):
+        run_experiment(str(params_path))
+
+    # Assert experiment_metadata.json exists and shows 'errored' status
+    metadata_path = temp_parallel_experiment_folder / "experiment_metadata.json"
+    assert metadata_path.is_file()
+    with open(metadata_path, "r") as f:
+        metadata = json.load(f)
+
+    assert metadata["experiment_id"] == temp_parallel_experiment_folder.name
+    assert metadata["execution_status"] == "errored"
+    assert metadata["start_timestamp"] is not None
+    assert metadata["end_timestamp"] is not None
+    assert "error_details" in metadata
+    assert "ScannerError" in metadata["error_details"]
+    assert metadata["run_counts"]["successful"] == 0
+    assert metadata["run_counts"]["failed"] == 0
+    assert metadata["run_counts"]["retried"] == 0
+    assert metadata["summary"] is None  # Summary should not be available for catastrophic failure

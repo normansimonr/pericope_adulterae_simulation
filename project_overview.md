@@ -60,11 +60,43 @@ This command will create a virtual environment (if one doesn't already exist) an
 
 ## Execution
 
-The `pasim` framework provides a simple, in-memory execution pathway for running a single simulation and inspecting its results. This is useful for development, debugging, and single-run analysis.
+The `pasim` framework provides a robust and flexible execution layer for running both single simulations and complex Monte Carlo experiments.
+
+### Experiment-Level Execution
+
+The primary entry point for orchestrating full experiments is the `pasim.execution.orchestrator.run_experiment` function. This function takes a single parameter file and manages the entire execution lifecycle, including:
+
+-   Loading and validating experiment parameters (`n_runs`, `max_retries`, `seed`).
+-   Launching multiple independent simulation runs in parallel.
+-   Implementing robust retry logic for individual run failures.
+-   Persisting experiment-level metadata (`experiment_metadata.json`) for overall tracking and reproducibility.
+-   Returning a concise summary of the experiment's outcome.
+
+```python
+from pasim.execution.orchestrator import run_experiment
+
+# Define your experiment in a YAML file, e.g., experiments/my_experiment/params.yaml
+# with fields like:
+# n_runs: 100
+# max_retries: 3
+# seed: 12345
+
+experiment_summary = run_experiment("experiments/my_experiment/params.yaml")
+print(experiment_summary)
+```
+
+### Parallel Run Orchestration
+
+The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`. It is responsible for:
+
+-   Launching N independent simulation runs concurrently using process-based parallelism.
+-   Ensuring each run receives a unique, derived seed for natural RNG variability.
+-   Implementing a retry mechanism for individual runs, allowing failures to be recorded and retried without halting the entire batch.
+-   Collecting results from all runs (including failure records) and returning a comprehensive summary.
 
 ### Single-Run Execution
 
-The primary entry point for this is the `pasim.execution.runner.run_single` function.
+The lowest-level execution entry point is the `pasim.execution.runner.run_single` function. This function executes a single, in-memory simulation run and automatically persists its results to a unique run directory. It is primarily called by `run_parallel` for each individual simulation.
 
 ```python
 from pasim.execution.runner import run_single
@@ -172,25 +204,27 @@ This core distinction—shocks that alter existing state versus environments tha
     -   `state.py`: Defines the core data structures and identity registries for the simulation. This includes `Manuscript` and `Witness` data classes, as well as the `ManuscriptRegistry` and `WitnessRegistry` that manage the unique identities of these entities. A top-level `StateRegistry` class holds these registries, providing a consistent snapshot of what exists in the simulation.
 -   **`config/`**: Manages the configuration and parameters for the simulations.
     -   `schema.py`: Defines the complete, hierarchical validation schema for all simulation parameters using `Pydantic`. This is the single source of truth for configuration.
--   **`execution/`**: Handles the orchestration and running of simulations.
-    -   `runner.py`: Will execute a single simulation run.
-    -   `batch.py`: For managing and running multiple simulations in batches.
-    -   `parallel.py`: For parallelizing simulation execution.
+-   **`execution/`**: Handles the orchestration and running of simulations, forming the core of the experiment execution layer.
+    -   **`orchestrator.py`**: Implements the high-level `run_experiment` function, serving as the experiment-level entrypoint. It loads experiment parameters, manages experiment metadata (`experiment_metadata.json`), invokes the parallel runner, and returns a comprehensive summary of the experiment's outcome, including retry policies and failure records.
+    -   **`parallel.py`**: Provides the `run_parallel` function for orchestrating multiple independent simulation runs concurrently. It ensures process-based parallelism, generates unique seeds for each run, implements robust retry logic with failure handling, and collects run-level results.
+    -   **`runner.py`**: Contains the `run_single` function, which is the entry point for executing a single, in-memory simulation run. It is responsible for setting up the RNG, running the core genealogy generation, and persisting the individual run's results.
+    -   `batch.py`: (Intended for future batch management, currently unused)
 -   **`analysis/`**: Provides tools for processing, analyzing, and visualizing simulation results.
     -   `metrics.py`: For defining and calculating simulation metrics.
     -   `plots.py`: For generating visualizations of results.
     -   `statistics.py`: For statistical analysis of simulation outputs.
 -   **`io/`**: Manages input and output operations, including reading initial data and writing simulation results.
-    -   `persistence.py`: Provides a research-grade persistence layer for saving complete simulation outputs. For every `run_single()` execution, it creates a unique run directory under `experiments/<experiment_name>/runs/<run_number>/` and saves the following artifacts:
-        -   `config.yaml`: An exact copy of the input configuration file.
-        -   `run_metadata.json`: High-level metadata about the run (seed, final tick, total instances/manuscripts, graph nodes/edges).
-        -   `genealogy.json`: The complete genealogy graph structure (nodes with instance_id, manuscript_id, birth_tick, reputation; and edges with parent/child relationships).
-        -   `instances.json`: Detailed metadata for all witness instances.
-        -   `manuscripts.json`: Full details of all manuscripts, including their physical attributes.
-        -   `instance_texts.tsv`: A tab-separated file containing the textual content of all witness instances, ordered by birth_tick, ensuring streaming writes for large datasets.
-        -   `telemetry.json`: The raw telemetry log from the simulation.
-        -   `events.log`: A chronological plain-text log of key simulation events (manuscript creation/death, instance creation with parent info).
-    -   `formats.py`: For handling different data formats.
+    -   `persistence.py`: Provides a research-grade persistence layer for saving both individual simulation run outputs and experiment-level metadata.
+        -   For individual runs: Every `run_single()` execution automatically generates a unique, timestamped run directory (`experiments/<experiment_name>/runs/<run_number>/`) containing a complete snapshot of the simulation's output. This process includes a concurrent-safe mechanism for resolving unique run directory names. Artifacts saved per run include:
+            -   `config.yaml`: An exact copy of the input configuration file.
+            -   `run_metadata.json`: High-level metadata about the run (seed, final tick, total instances/manuscripts, graph nodes/edges).
+            -   `genealogy.json`: The complete genealogy graph structure (nodes with instance_id, manuscript_id, birth_tick, reputation; and edges with parent/child relationships).
+            -   `instances.json`: Detailed metadata for all witness instances.
+            -   `manuscripts.json`: Full details of all manuscripts, including their physical attributes.
+            -   `instance_texts.tsv`: A tab-separated file containing the textual content of all witness instances, ordered by birth_tick, ensuring streaming writes for large datasets.
+            -   `telemetry.json`: The raw telemetry log from the simulation.
+            -   `events.log`: A chronological plain-text log of key simulation events (manuscript creation/death, instance creation with parent info).
+        -   For experiments: The `experiment_metadata.json` file is created at the experiment root (`experiments/<experiment_name>/`) to provide a durable record describing the experiment as a whole. This includes its parameters, execution status, overall run counts (successful, failed, retried), and timestamps.    -   `formats.py`: For handling different data formats.
     -   `output.py`: For writing simulation outputs.
     -   `aggregation.py`: For aggregating results from multiple runs.
 -   **`utils/`**: Contains common utility functions used across the project.
