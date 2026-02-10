@@ -66,14 +66,31 @@ def _create_initial_state(
             state.registries.witnesses.add(witness)
             state.alive_manuscripts.add(manuscript.manuscript_id)
 
-            add_root_node(
-                graph=state.graph,
-                node_id=instance_id,
-                witness_id=witness_id,
-                manuscript_id=manuscript_id,
-                birth_tick=start_tick,
-                reputation=int(rng.integers(1, 6)),
-            )
+            if state.graph.number_of_nodes() == 0:
+                add_root_node(
+                    graph=state.graph,
+                    node_id=instance_id,
+                    witness_id=witness_id,
+                    manuscript_id=manuscript_id,
+                    birth_tick=start_tick,
+                    reputation=int(rng.integers(1, 6)),
+                    death_tick=death_tick,  # Pass death_tick to root node
+                )
+            else:
+                # For subsequent manuscripts, add as child nodes of the initial root
+                # This ensures graph validity when creating multiple initial manuscripts
+                # without violating the single root invariant.
+                root_node_id = list(state.graph.nodes)[0]  # Get the ID of the first (root) node
+                state.graph.add_node(
+                    instance_id,
+                    witness_id=witness_id,
+                    manuscript_id=manuscript_id,
+                    birth_tick=start_tick,
+                    reputation=int(rng.integers(1, 6)),
+                    death_tick=death_tick,  # Pass death_tick to child node
+                )
+                state.graph.add_edge(root_node_id, instance_id)  # Link to the root
+
             state.manuscript_to_instance_map[manuscript.manuscript_id] = instance_id
 
             # Create and store initial text for the new instance
