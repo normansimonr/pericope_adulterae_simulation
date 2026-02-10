@@ -231,20 +231,67 @@ def _spawn_new_manuscripts_from_demand(
                 )
                 state.registries.witnesses.add(witness)
 
-                if not exemplars:
-                    add_root_node(
-                        graph=state.graph,
-                        node_id=instance_id,
-                        witness_id=witness_id,
-                        manuscript_id=manuscript_id,
-                        birth_tick=current_tick,
-                        reputation=reputation,
-                        death_tick=None,  # Per design, node does not store death tick
-                    )
-                    # This is an autograph (root node), so create its initial text
-                    new_text = make_initial_text(params)
-                    state.registries.instance_texts[instance_id] = new_text
-                else:
+                if not exemplars:  # This covers cases where `select_exemplars` found nothing
+                    if state.graph.number_of_nodes() == 0:
+                        # This is the very first node, the autograph.
+                        add_root_node(
+                            graph=state.graph,
+                            node_id=instance_id,
+                            witness_id=witness_id,
+                            manuscript_id=manuscript_id,
+                            birth_tick=current_tick,
+                            reputation=reputation,
+                            death_tick=None,
+                        )
+                        new_text = make_initial_text(params)
+                        state.registries.instance_texts[instance_id] = new_text
+                    else:
+                        # No local exemplars found, but the graph is not empty.
+                        # Select parents from all alive instances.
+                        all_alive_instance_ids = [
+                            state.manuscript_to_instance_map[ms_id]
+                            for ms_id in state.alive_manuscripts
+                            if ms_id in state.manuscript_to_instance_map  # Safety check
+                        ]
+
+                        if not all_alive_instance_ids:
+                            # This should ideally not happen if the graph is not empty,
+                            # but if it does, it implies a bug or extreme scenario
+                            raise ValueError(
+                                "No alive instances to select parents from."
+                            )
+
+                        # Determine number of parents (1-3), replicating logic from exemplar_selection
+                        num_parents_choice = rng.choice([1, 2, 3], p=[0.8, 0.1, 0.1])
+                        # Ensure we don't try to pick more parents than available
+                        num_parents = min(num_parents_choice, len(all_alive_instance_ids))
+
+                        # Select parents randomly from all alive instances
+                        random_parents = rng.choice(
+                            all_alive_instance_ids,
+                            size=num_parents,
+                            replace=False  # Ensure unique parents
+                        ).tolist()  # Convert numpy array to list for add_child_node
+
+                        add_child_node(
+                            graph=state.graph,
+                            node_id=instance_id,
+                            parent_node_ids=random_parents,
+                            witness_id=witness_id,
+                            manuscript_id=manuscript_id,
+                            birth_tick=current_tick,
+                            reputation=reputation,
+                            death_tick=None,
+                        )
+                        exemplar_texts = [state.registries.instance_texts[eid] for eid in random_parents]
+                        new_text = apply_scribal_rule(
+                            exemplar_texts=exemplar_texts,
+                            rng=rng,
+                            reputation=reputation,
+                            config=params,
+                        )
+                        state.registries.instance_texts[instance_id] = new_text
+                else:  # Exemplars were found by select_exemplars
                     add_child_node(
                         graph=state.graph,
                         node_id=instance_id,
@@ -253,7 +300,7 @@ def _spawn_new_manuscripts_from_demand(
                         manuscript_id=manuscript_id,
                         birth_tick=current_tick,
                         reputation=reputation,
-                        death_tick=None,  # Per design, node does not store death tick
+                        death_tick=None,
                     )
                     # This is a copy, so generate its text from exemplars
                     exemplar_texts = [state.registries.instance_texts[eid] for eid in exemplars]

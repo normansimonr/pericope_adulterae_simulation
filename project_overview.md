@@ -395,17 +395,23 @@ This module provides the fundamental building blocks for constructing and managi
 **Key Components and Functions:**
 
 *   **`GenealogyGraph` (Type Alias):** Simply an alias for `networkx.DiGraph`.
+*   **`GenealogyValidationError`:** A custom exception raised when any genealogy invariant is violated.
 *   **`create_empty_genealogy() -> GenealogyGraph`:** Returns an empty `networkx.DiGraph` instance, ready for population.
-*   **`add_root_node(...)`:** Adds a witness instance node to the graph that has no parents (a root of a lineage).
+*   **`add_root_node(...)`:** Adds a root witness instance to the graph (a node with no parents). This function strictly enforces that a root node can only be added to an empty graph, ensuring **exactly one autograph** for the entire genealogy. It calls `validate_genealogy` after addition.
     *   Takes `graph`, `node_id` (unique identifier), `witness_id` (foreign key to `Witness` registry), `manuscript_id` (foreign key to `Manuscript` registry), `birth_tick`, `reputation`, and an optional `death_tick` as attributes for the node.
     *   Raises `ValueError` if `node_id` already exists.
-*   **`add_child_node(...)`:** Adds a new witness instance node as a child of one or more existing parent nodes, representing a copying event.
-    *   Takes similar parameters to `add_root_node`, plus `parent_node_ids` (a list of parent node IDs).
+    *   Raises `GenealogyValidationError` if a root node is attempted on a non-empty graph.
+*   **`add_child_node(...)`:** Adds a new witness instance node as a child of one or more existing parent nodes, representing a copying event. This function now explicitly checks for and prevents the creation of cycles or other invariant violations by calling `validate_genealogy` after the node and edges are added, reverting the changes if validation fails.
+    *   Takes similar parameters to `add_root_node`, plus `parent_node_ids` (a list of node IDs for the parent(s)).
     *   Adds edges from each parent to the new child.
-    *   Includes validation to prevent adding to non-existent parents and to ensure that adding the node and its edges does not introduce a cycle into the graph (raises `networkx.HasACycle`).
-*   **`validate_genealogy(graph: GenealogyGraph) -> None`:** Performs structural checks on a given graph.
-    *   Verifies that the graph is indeed a `networkx.DiGraph` and a DAG.
-    *   Checks that all nodes contain essential attributes (`witness_id`, `manuscript_id`, `birth_tick`, `reputation`).
+    *   Raises `ValueError` if a node with `node_id` already exists, if any parent ID does not exist, or if no parents are provided.
+    *   Raises `GenealogyValidationError` if adding the node violates any genealogy invariants (e.g., introduces a cycle, or implicitly creates a second root by attempting to add a node without parents when the graph is not empty).
+*   **`validate_genealogy(graph: GenealogyGraph) -> None`:** This is the **single authoritative validator** for genealogy correctness. It performs structural sanity checks and enforces critical invariants:
+    *   The graph must be a `networkx.DiGraph` and a **Directed Acyclic Graph (DAG)**.
+    *   There must be **at most one root (autograph)**. This implicitly ensures **no orphan instances** (every non-autograph node has at least one parent) by disallowing multiple disconnected components, each with its own root.
+    *   All nodes must contain essential attributes (`witness_id`, `manuscript_id`, `birth_tick`, `reputation`).
+    *   Raises `TypeError` if the graph is not a `networkx.DiGraph`.
+    *   Raises `GenealogyValidationError` if any invariant is violated.
 *   **Query Functions:**
     *   **`get_parents(graph, node_id) -> List[NodeID]`:** Returns a list of parent node IDs for a given node.
     *   **`get_children(graph, node_id) -> List[NodeID]`:** Returns a list of child node IDs for a given node.
@@ -424,7 +430,7 @@ This module, `genealogy_generator.py`, is the central orchestrator for the simul
 *   **`initialise_generation_state()`:** Creates and returns an empty `GenerationState` object, setting the initial tick to zero and preparing empty data structures.
 *   **`handle_deaths(state: GenerationState)`:** Identifies and removes manuscripts whose `death_tick` has arrived from the `alive_manuscripts` set. This affects their availability for future copying but does not alter the historical record in the graph or registry.
 *   **`handle_migration(state: GenerationState, rng: RNG, p_region_migration: float, p_internal_relocation: Optional[float])`:** Manages the movement of manuscripts. It applies probabilities for manuscripts to migrate between different regions or relocate within their current region, updating their `region` and `location` attributes.
-*   **`_spawn_new_manuscripts_from_demand(...)`:** This private function is responsible for creating new manuscripts to meet regional demand. If the number of alive manuscripts in a region is below the `demanded_count`, new manuscripts are spawned. For each new manuscript, an associated `Witness` and `WitnessInstance` (graph node) are created. It handles the assignment of a `death_tick`, `material` (via `MaterialTransitionManager`), `reputation`, and `script` (via `ScriptTransitionManager`), and performs exemplar selection.
+*   **`_spawn_new_manuscripts_from_demand(...)`:** This private function is responsible for creating new manuscripts to meet regional demand. If the number of alive manuscripts in a region is below the `demanded_count`, new manuscripts are spawned. For each new manuscript, an associated `Witness` and `WitnessInstance` (graph node) are created. It handles the assignment of a `death_tick`, `material` (via `MaterialTransitionManager`), `reputation`, and `script` (via `ScriptTransitionManager`). Critically, if `select_exemplars` returns no suitable parents (e.g., no alive manuscripts in the region), and the graph is not empty (i.e., not the very first autograph), it will **randomly select parents from all currently alive instances** to ensure the new manuscript is always a child node, thereby maintaining the **single autograph invariant**.
 *   **`advance_tick(...)`:** This is the core per-tick orchestrator. It increments the simulation clock and calls the other stage-specific functions in a strict order: `handle_deaths`, `event_manager.apply_events_for_tick` (historical events), `handle_migration`, and `_spawn_new_manuscripts_from_demand`.
 *   **`run_genealogy_generator(parameters: Dict[str, Any], rng: RNG)`:** The high-level entry point for the genealogy generation. It validates input parameters against `SimulationConfig`, initializes the simulation state and managers (including `HistoricalEventManager`, `MaterialTransitionManager`, and `ScriptTransitionManager`), and then runs the main simulation loop by iteratively calling `advance_tick` for the specified `total_ticks`. It ensures reproducibility by using a seeded NumPy random number generator.
 
