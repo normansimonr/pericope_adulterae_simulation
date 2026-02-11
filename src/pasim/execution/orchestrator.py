@@ -70,19 +70,21 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
         base_seed = params.get("seed")
 
         metadata.update({
-            "total_requested_runs": n_runs,
-            "retry_policy": max_retries,
-            "seed": base_seed,
+            "total_requested_runs": int(n_runs),
+            "retry_policy": int(max_retries),
+            "seed": int(base_seed) if base_seed is not None else None,
         })
         # Overwrite metadata with updated config info
         with open(experiment_metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
 
         # Invoke the parallel orchestrator
-        experiment_summary = cast(Dict[str, Any], run_parallel(str(params_file_path), base_seed=base_seed))
+        experiment_summary = cast(
+            Dict[str, Any], run_parallel(str(params_file_path), n_runs=n_runs, max_retries=max_retries, seed=base_seed)
+        )
 
         # Calculate retried_runs
-        retried_runs_count = sum(1 for record in experiment_summary["failure_records"] if record["attempt"] > 1)
+        retried_runs_count = sum(record["attempt"] for record in experiment_summary["failure_records"])
 
         # Final metadata update (completed state)
         final_status = "completed"
@@ -93,9 +95,9 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
             "execution_status": final_status,
             "end_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "run_counts": {
-                "successful": experiment_summary["successful_runs"],
-                "failed": experiment_summary["failed_runs"],
-                "retried": retried_runs_count,
+                "successful": int(experiment_summary["successful_runs"]),
+                "failed": int(experiment_summary["failed_runs"]),
+                "retried": int(retried_runs_count),
             },
             "summary": experiment_summary,
         })

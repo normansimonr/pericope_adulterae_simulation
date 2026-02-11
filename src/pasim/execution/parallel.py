@@ -1,107 +1,128 @@
+import logging
 import os
-import time
-from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
-from typing import Any, Dict, Optional
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional
 
-import yaml
-
+from pasim.core.rng import RNGContext
 from pasim.execution.runner import run_single
 
+logger = logging.getLogger(__name__)
 
-def _run_single_with_retry(run_index: int, params_path: str, seed: int, max_retries: int) -> Dict[str, Any]:
+
+def _run_wrapper(
+    params_path: str,
+    seed: int,
+    max_retries: int,
+) -> Dict[str, Any]:
     """
-    Worker function that executes a single run with a retry mechanism.
-
-    This function is designed to be called in a parallel worker process. It attempts
-    to execute `run_single` and retries on failure up to `max_retries`.
-
-    Args:
-        run_index: The index of the run (for tracking purposes).
-        params_path: The file path to the experiment's parameters file.
-        seed: The seed for the random number generator.
-        max_retries: The maximum number of retry attempts.
-
-    Returns:
-        A dictionary indicating the status of the run ('success' or 'failed'),
-        the run index, and any recorded failures.
+    Wrapper function to execute a single simulation run with retry logic.
+    Returns a dictionary indicating success/failure and relevant data.
     """
-    failures = []
     for attempt in range(max_retries + 1):
         try:
-            run_single(params_path, seed)
-            return {"status": "success", "run_index": run_index, "failures": []}
+            result = run_single(params_path=params_path, seed=seed)
+            return {
+                "status": "success",
+                "result": result,
+                "seed": seed,
+                "retries": attempt,
+                "error": None,
+            }
         except Exception as e:
-            failures.append({
-                "run_index": run_index,
-                "attempt": attempt + 1,
-                "exception": repr(e),
-            })
-            # Small backoff before retrying
-            time.sleep(0.1)
-
-    # If all attempts fail
-    return {"status": "failed", "run_index": run_index, "failures": failures}
-
-
-def run_parallel(params_path: str, base_seed: Optional[int] = None) -> Dict[str, Any]:
-    """
-    Orchestrates multiple independent simulation runs with retries.
-
-    This function launches N independent simulations in parallel, handling failures
-    and retries for each run.
-
-    Args:
-        params_path: The file path to the YAML configuration file for the experiment.
-                     Must contain 'n_runs' and optionally 'max_retries'.
-        base_seed: An optional base seed for the random number generators.
-
-    Returns:
-        A dictionary summarizing the execution results.
-    """
-    params_file_path = Path(params_path)
-    if not params_file_path.is_file():
-        raise FileNotFoundError(f"Parameter file not found at: {params_path}")
-
-    with open(params_file_path, "r") as f:
-        params = yaml.safe_load(f)
-
-    n_runs = params.get("n_runs")
-    if n_runs is None or not isinstance(n_runs, int) or n_runs <= 0:
-        raise ValueError(f"The params file '{params_path}' must contain a positive integer field 'n_runs'.")
-
-    max_retries = params.get("max_retries", 1)  # Default to 1 retry
-
-    if base_seed is None:
-        base_seed = params.get("seed", 42)
-
-    seeds = [base_seed + i for i in range(n_runs)]
-
-    num_workers = os.cpu_count() or 1
-
-    print(f"Launching {n_runs} simulation runs in parallel using {num_workers} processes...")
-
-    args_list = [(i, params_path, seeds[i], max_retries) for i in range(n_runs)]
-
-    results = []
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        # Use map to submit all tasks and collect results
-        # The helper function handles the retry logic internally.
-        for result in executor.map(_run_single_with_retry, *zip(*args_list)):
-            results.append(result)
-
-    successful_runs = sum(1 for r in results if r["status"] == "success")
-    failed_runs = n_runs - successful_runs
-    failure_records = [r["failures"] for r in results if r["status"] == "failed"]
-    # Flatten the list of lists of failures
-    failure_records = [item for sublist in failure_records for item in sublist]
-
-    summary = {
-        "total_runs": n_runs,
-        "successful_runs": successful_runs,
-        "failed_runs": failed_runs,
-        "failure_records": failure_records,
+            logger.warning(f"Run (seed: {seed}) failed on attempt {attempt}/{max_retries}: {e}")
+            if attempt >= max_retries:
+                logger.error(f"Run (seed: {seed}) failed after {max_retries} retries.")
+                return {
+                    "status": "failure",
+                    "result": None,
+                    "seed": seed,
+                    "retries": attempt,
+                    "error": str(e),
+                }
+    # This line should ideally not be reached
+    return {
+        "status": "failure",
+        "result": None,
+        "seed": seed,
+        "retries": max_retries,
+        "error": "Unknown error in _run_wrapper",
     }
 
-    print("Parallel execution complete.")
-    return summary
+
+def run_parallel(
+    params_path: str,
+    n_runs: int,
+    max_retries: int,
+    seed: Optional[int] = None,
+    num_processes: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Orchestrates multiple independent simulation runs in parallel.
+
+    Args:
+        params_path (str): Path to the YAML configuration file for the experiment.
+        n_runs (int): The number of independent simulation runs to execute.
+        max_retries (int): The maximum number of times to retry a failed run.
+        seed (Optional[int]): An optional master seed for the random number generator.
+                              If None, a default fixed seed is used.
+        num_processes (Optional[int]): The number of parallel processes to use.
+                                       If None, it defaults to the number of CPUs.
+
+    Returns:
+        Dict[str, Any]: A summary of the parallel execution, including counts of
+                        successful/failed runs and detailed failure records.
+    """
+    if n_runs <= 0:
+        return {
+            "successful_runs": 0,
+            "failed_runs": 0,
+            "failure_records": [],
+            "total_runs_attempted": 0,
+        }
+
+    rng_context = RNGContext(seed=seed)
+    # Generate a unique seed for each run
+    run_seeds = [gen.integers(0, 2**32 - 1) for gen in rng_context.spawn(n_runs)]
+
+    successful_runs_count = 0
+    failed_runs_count = 0
+    failure_records: List[Dict[str, Any]] = []
+
+    # Use default number of processes if not specified
+    if num_processes is None:
+        num_processes = os.cpu_count() or 1
+
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        # Submit all runs to the executor
+        futures = {executor.submit(_run_wrapper, params_path, run_seeds[i], max_retries): run_seeds[i] for i in range(n_runs)}
+
+        for future in as_completed(futures):
+            current_seed = int(futures[future])  # Retrieve and convert to int
+            try:
+                result_data = future.result()
+                if result_data["status"] == "success":
+                    successful_runs_count += 1
+                    logger.info(f"Run (seed: {current_seed}) completed successfully after {result_data['retries']} retries.")
+                else:
+                    failed_runs_count += 1
+                    failure_records.append({
+                        "seed": current_seed,
+                        "error": result_data["error"],
+                        "attempt": result_data["retries"],
+                    })
+                    logger.error(f"Run (seed: {current_seed}) failed after {result_data['retries']} retries: {result_data['error']}")
+            except Exception as exc:
+                failed_runs_count += 1
+                failure_records.append({
+                    "seed": current_seed,
+                    "error": f"Unhandled exception: {str(exc)}",
+                    "attempt": 0,  # Unhandled exception means no retries by _run_wrapper
+                })
+                logger.critical(f"Run (seed: {current_seed}) generated an unhandled exception: {exc}")
+
+    return {
+        "successful_runs": successful_runs_count,
+        "failed_runs": failed_runs_count,
+        "failure_records": failure_records,
+        "total_runs_attempted": n_runs,
+    }

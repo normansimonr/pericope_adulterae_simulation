@@ -62,6 +62,10 @@ This command will create a virtual environment (if one doesn't already exist) an
 
 The `pasim` framework provides a robust and flexible execution layer for running both single simulations and complex Monte Carlo experiments.
 
+For detailed instructions on setting up and running experiments, including the experiment directory structure, minimal single-run setup, and the structure of parameter files, please refer to:
+-   **`docs/experiments.md`**: Comprehensive guide to experiment configuration and execution.
+-   **`experiments/params_template.yaml`**: A canonical template for defining experiment parameters.
+
 ### Experiment-Level Execution
 
 The primary entry point for orchestrating full experiments is the `pasim.execution.orchestrator.run_experiment` function. This function takes a single parameter file and manages the entire execution lifecycle, including:
@@ -100,6 +104,10 @@ The lowest-level execution entry point is the `pasim.execution.runner.run_single
 
 ```python
 from pasim.execution.runner import run_single
+
+# Note: For typical experiment execution, you should use `run_experiment`
+# with a `params.yaml` that sets `n_runs: 1`. Direct calls to `run_single`
+# are usually for debugging or integrating into custom workflows.
 
 result = run_single("experiments/exp001_baseline/params.yaml", seed=42)
 ```
@@ -767,7 +775,7 @@ This file is currently empty. It is intended for managing and running multiple s
 
 ### `src/pasim/execution/parallel.py`
 
-This file is currently empty. It is intended for parallelizing simulation execution, as described in `project_overview.md`. This would likely involve using multiprocessing or threading to run multiple simulation instances concurrently, potentially leveraging the `RNGContext` to ensure independent and reproducible random number streams for each parallel process.
+This module provides the `run_parallel` function, which orchestrates multiple independent simulation runs concurrently using process-based parallelism. It manages unique seed generation for each run via `RNGContext`, implements robust retry logic for individual run failures, and aggregates results (including failure records) into a comprehensive summary. It is primarily called by `run_experiment` in the `orchestrator` module.
 
 ### `src/pasim/execution/runner.py`
 
