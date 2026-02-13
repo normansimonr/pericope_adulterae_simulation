@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, Union, cast
 
 import yaml
+from pydantic import ValidationError
 
+from pasim.config.schema import SimulationConfig
 from pasim.execution.parallel import run_parallel
 
 
@@ -38,37 +40,45 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
 
     experiment_metadata_path = _get_experiment_metadata_path(params_file_path)
 
-    # Initial metadata structure (will be updated after params are loaded)
+    # Initialize metadata early to ensure the file exists even on parsing/validation errors
     metadata: Dict[str, Any] = {
         "experiment_id": params_file_path.parent.name,
-        "params_path": str(params_file_path.name),  # Store relative path (just the filename)
-        "total_requested_runs": None,  # Placeholder
-        "parallelism_level_used": os.cpu_count() or 1,
-        "retry_policy": None,  # Placeholder
-        "seed": None,  # Placeholder
+        "params_path": str(params_file_path.name),
         "execution_status": "started",
         "start_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "run_counts": {"successful": 0, "failed": 0, "retried": 0},
         "end_timestamp": None,
+        "run_counts": {"successful": 0, "failed": 0, "retried": 0},
         "summary": None,
         "error_details": None,
+        "simulation_config_snapshot": None,  # Will store validated config
+        "parallelism_level_used": os.cpu_count() or 1,  # Add this line
     }
-    # Write initial metadata (started state) - always exists as soon as possible
     with open(experiment_metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
     try:
-        # Load params and update metadata with config-dependent values
+        # Load raw params (could fail if YAML is malformed)
         with open(params_file_path, "r") as f:
-            params = yaml.safe_load(f)
+            raw_params = yaml.safe_load(f)
+        if not isinstance(raw_params, dict):
+            raise ValueError("YAML file must contain a dictionary.")
 
-        n_runs = params.get("n_runs")
+        # Validate raw_params against SimulationConfig (catches schema errors)
+        # and store a snapshot of the validated config
+        config = SimulationConfig(**raw_params)
+        metadata["simulation_config_snapshot"] = config.model_dump(
+            mode="json"
+        )  # Explicitly use config and convert enums to JSON-compatible types
+
+        # Extract n_runs, max_retries, and seed from raw_params (top-level experiment parameters)
+        n_runs = raw_params.get("n_runs")
         if n_runs is None or not isinstance(n_runs, int) or n_runs <= 0:
             raise ValueError(f"Experiment params file '{params_file_path}' must contain a positive integer field 'n_runs'.")
 
-        max_retries = params.get("max_retries", 1)
-        base_seed = params.get("seed")
+        max_retries = raw_params.get("max_retries", 1)
+        base_seed = raw_params.get("seed")
 
+        # Update metadata with these top-level parameters
         metadata.update({
             "total_requested_runs": int(n_runs),
             "retry_policy": int(max_retries),
@@ -84,7 +94,7 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
         )
 
         # Calculate retried_runs
-        retried_runs_count = sum(record["attempt"] for record in experiment_summary["failure_records"])
+        retried_runs_count = sum(record["attempt"] for record in experiment_summary.get("failure_records", []))
 
         # Final metadata update (completed state)
         final_status = "completed"
@@ -113,8 +123,30 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
 
         return experiment_summary
 
+    except yaml.YAMLError as e:
+        # Handle errors during initial YAML loading
+        metadata.update({
+            "execution_status": "errored_init",  # Specific status for initial errors
+            "end_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "error_details": repr(e),
+        })
+        with open(experiment_metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        raise e  # Re-raise YAML errors directly
+
+    except (ValueError, ValidationError) as e:
+        # Handle errors during Pydantic validation or other value errors
+        metadata.update({
+            "execution_status": "errored_init",  # Specific status for initial errors
+            "end_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "error_details": repr(e),
+        })
+        with open(experiment_metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        raise ValueError(f"Experiment initialization failed: {e}") from e  # Re-raise as ValueError
+
     except Exception as e:
-        # If any error occurs (including params loading failure), update metadata
+        # Catch any other unexpected runtime errors during parallel execution
         # Load the last written metadata to ensure we don't overwrite with old placeholders
         try:
             with open(experiment_metadata_path, "r") as f:
@@ -123,7 +155,7 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
             current_metadata = metadata  # Fallback to our initial in-memory dict if file was never written or corrupted
 
         current_metadata.update({
-            "execution_status": "errored",
+            "execution_status": "errored_runtime",
             "end_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "error_details": repr(e),
         })

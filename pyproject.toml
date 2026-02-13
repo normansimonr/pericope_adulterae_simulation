@@ -13,6 +13,9 @@ networkx = "*"
 pydantic = "*"
 pyyaml = "*"
 
+[tool.poetry.scripts]
+pasim = "pasim.cli:main"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
 mypy = "*"

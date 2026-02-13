@@ -94,7 +94,7 @@ def test_run_parallel_failure_handling(temp_parallel_experiment_folder: Path):
         yaml.dump(params, f)
 
     # Mock run_single to always fail
-    with patch("pasim.execution.parallel.run_single", side_effect=ValueError("Test failure")):
+    with patch("pasim.execution.parallel.run_single", side_effect=ValueError("Run failure")):
         summary = run_parallel(str(params_path), n_runs=n_runs, max_retries=max_retries)
 
     # Assert summary reflects the failed runs and retries
@@ -107,12 +107,12 @@ def test_run_parallel_failure_handling(temp_parallel_experiment_folder: Path):
     # Check the details of one of the failure records
     first_failure = summary["failure_records"][0]
     assert "seed" in first_failure
-    assert first_failure["error"] == "Test failure"
+    assert first_failure["error"] == "Run failure"
     assert first_failure["attempt"] == max_retries
 
     last_failure = summary["failure_records"][-1]
     assert "seed" in last_failure
-    assert last_failure["error"] == "Test failure"
+    assert last_failure["error"] == "Run failure"
     assert last_failure["attempt"] == max_retries
 
 
@@ -147,7 +147,7 @@ def test_run_experiment_successful_execution(temp_parallel_experiment_folder: Pa
     assert metadata["experiment_id"] == temp_parallel_experiment_folder.name
     assert metadata["params_path"] == params_path.name
     assert metadata["total_requested_runs"] == n_runs
-    assert metadata["parallelism_level_used"] == os.cpu_count() or 1
+    assert metadata["parallelism_level_used"] == (os.cpu_count() or 1)
     assert metadata["retry_policy"] == max_retries
     assert metadata["seed"] == base_seed
     assert metadata["execution_status"] == "completed"
@@ -223,7 +223,7 @@ def test_run_experiment_catastrophic_failure_metadata(temp_parallel_experiment_f
         metadata = json.load(f)
 
     assert metadata["experiment_id"] == temp_parallel_experiment_folder.name
-    assert metadata["execution_status"] == "errored"
+    assert metadata["execution_status"] == "errored_init"  # Changed from "errored"
     assert metadata["start_timestamp"] is not None
     assert metadata["end_timestamp"] is not None
     assert "error_details" in metadata
