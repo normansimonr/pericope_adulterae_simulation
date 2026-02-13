@@ -241,7 +241,6 @@ def _spawn_new_manuscripts_from_demand(
                             manuscript_id=manuscript_id,
                             birth_tick=current_tick,
                             reputation=reputation,
-                            death_tick=None,
                         )
                         new_text = make_initial_text(params)
                         state.registries.instance_texts[instance_id] = new_text
@@ -257,9 +256,7 @@ def _spawn_new_manuscripts_from_demand(
                         if not all_alive_instance_ids:
                             # This should ideally not happen if the graph is not empty,
                             # but if it does, it implies a bug or extreme scenario
-                            raise ValueError(
-                                "No alive instances to select parents from."
-                            )
+                            raise ValueError("No alive instances to select parents from.")
 
                         # Determine number of parents (1-3), replicating logic from exemplar_selection
                         num_parents_choice = rng.choice([1, 2, 3], p=[0.8, 0.1, 0.1])
@@ -270,7 +267,7 @@ def _spawn_new_manuscripts_from_demand(
                         random_parents = rng.choice(
                             all_alive_instance_ids,
                             size=num_parents,
-                            replace=False  # Ensure unique parents
+                            replace=False,  # Ensure unique parents
                         ).tolist()  # Convert numpy array to list for add_child_node
 
                         add_child_node(
@@ -281,7 +278,6 @@ def _spawn_new_manuscripts_from_demand(
                             manuscript_id=manuscript_id,
                             birth_tick=current_tick,
                             reputation=reputation,
-                            death_tick=None,
                         )
                         exemplar_texts = [state.registries.instance_texts[eid] for eid in random_parents]
                         new_text = apply_scribal_rule(
@@ -300,7 +296,6 @@ def _spawn_new_manuscripts_from_demand(
                         manuscript_id=manuscript_id,
                         birth_tick=current_tick,
                         reputation=reputation,
-                        death_tick=None,
                     )
                     # This is a copy, so generate its text from exemplars
                     exemplar_texts = [state.registries.instance_texts[eid] for eid in exemplars]

@@ -35,7 +35,7 @@ def _create_initial_state(
     config: SimulationConfig,
     state_collector_fixture: List[GenerationState],
     start_tick: int = 0,
-    death_tick: int = 100,
+    death_tick: int = 100,  # Re-added
 ) -> GenerationState:
     """Helper to create a generation state with a set number of manuscripts in specific regions."""
     state = initialise_generation_state()
@@ -74,7 +74,6 @@ def _create_initial_state(
                     manuscript_id=manuscript_id,
                     birth_tick=start_tick,
                     reputation=int(rng.integers(1, 6)),
-                    death_tick=death_tick,  # Pass death_tick to root node
                 )
             else:
                 # For subsequent manuscripts, add as child nodes of the initial root
@@ -87,7 +86,6 @@ def _create_initial_state(
                     manuscript_id=manuscript_id,
                     birth_tick=start_tick,
                     reputation=int(rng.integers(1, 6)),
-                    death_tick=death_tick,  # Pass death_tick to child node
                 )
                 state.graph.add_edge(root_node_id, instance_id)  # Link to the root
 

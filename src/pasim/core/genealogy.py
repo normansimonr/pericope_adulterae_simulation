@@ -20,7 +20,7 @@ graph object (`networkx.DiGraph`). Node identity is explicit and stable,
 ensuring that graph construction is reproducible.
 """
 
-from typing import List, Optional, TypeAlias
+from typing import List, TypeAlias
 
 import networkx as nx
 
@@ -55,7 +55,6 @@ def add_root_node(
     manuscript_id: str,
     birth_tick: int,
     reputation: int,
-    death_tick: Optional[int] = None,
 ) -> None:
     """
     Adds a root witness instance to the genealogy (a node with no parents).
@@ -84,9 +83,7 @@ def add_root_node(
         - Raises `ValueError` if a node with `node_id` already exists.
     """
     if graph.number_of_nodes() != 0:
-        raise GenealogyValidationError(
-            "A root node (autograph) can only be added to an empty genealogy."
-        )
+        raise GenealogyValidationError("A root node (autograph) can only be added to an empty genealogy.")
 
     if graph.has_node(node_id):
         raise ValueError(f"Node with ID '{node_id}' already exists in the graph.")
@@ -97,7 +94,6 @@ def add_root_node(
         manuscript_id=manuscript_id,
         birth_tick=birth_tick,
         reputation=reputation,
-        death_tick=death_tick,
     )
     validate_genealogy(graph)
 
@@ -110,7 +106,6 @@ def add_child_node(
     manuscript_id: str,
     birth_tick: int,
     reputation: int,
-    death_tick: Optional[int] = None,
 ) -> None:
     """
     Adds a child witness instance descended from one or more parents.
@@ -159,7 +154,6 @@ def add_child_node(
         manuscript_id=manuscript_id,
         birth_tick=birth_tick,
         reputation=reputation,
-        death_tick=death_tick,
     )
     edges = [(parent_id, node_id) for parent_id in parent_node_ids]
     graph.add_edges_from(edges)
@@ -169,9 +163,7 @@ def add_child_node(
     except GenealogyValidationError as e:
         # If validation fails, revert the changes to maintain a valid state.
         graph.remove_node(node_id)
-        raise GenealogyValidationError(
-            f"Failed to add child '{node_id}': {e}"
-        ) from e
+        raise GenealogyValidationError(f"Failed to add child '{node_id}': {e}") from e
 
 
 def validate_genealogy(graph: GenealogyGraph) -> None:
@@ -202,27 +194,20 @@ def validate_genealogy(graph: GenealogyGraph) -> None:
 
     # Invariant 2: The graph must be acyclic.
     if not nx.is_directed_acyclic_graph(graph):
-        raise GenealogyValidationError(
-            "The genealogy graph must be a Directed Acyclic Graph (DAG)."
-        )
+        raise GenealogyValidationError("The genealogy graph must be a Directed Acyclic Graph (DAG).")
 
     # Invariant 3: At most one root. This also prevents orphan instances,
     # as any orphan would be a root of its own disconnected component.
     roots = get_roots(graph)
     if len(roots) > 1:
-        raise GenealogyValidationError(
-            f"Genealogy cannot have more than one root (autograph). "
-            f"Found {len(roots)} roots: {roots}"
-        )
+        raise GenealogyValidationError(f"Genealogy cannot have more than one root (autograph). " f"Found {len(roots)} roots: {roots}")
 
     # Invariant 4: All nodes must have required attributes.
     required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
     for node_id, attrs in graph.nodes(data=True):
         missing_attrs = required_attrs - set(attrs.keys())
         if missing_attrs:
-            raise GenealogyValidationError(
-                f"Node '{node_id}' is missing required attributes: {missing_attrs}"
-            )
+            raise GenealogyValidationError(f"Node '{node_id}' is missing required attributes: {missing_attrs}")
 
 
 def get_parents(graph: GenealogyGraph, node_id: NodeID) -> List[NodeID]:
