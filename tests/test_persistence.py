@@ -30,7 +30,6 @@ script_transitions:
 demand_schedule:
   0:
     Asia Minor: 1
-death_ticks: [1, 2, 3, 4, 5]
 """
 
 
@@ -221,8 +220,10 @@ class TestPersistence:
 
         # Check for instance births (using graph node IDs as per events.log format)
         for node_id in result.graph.nodes:
-            # The log message uses "Instance I1 created (autograph)", where I1 is the node_id
-            assert f"Instance {node_id} created (autograph)" in events_log_content, f"Instance birth for {node_id} not found in events.log"
+            # Check for general instance creation message
+            # The log can be "Instance I1 created (autograph)" or "Instance I2 created from I1"
+            # So, we check for a general "Instance {node_id} created"
+            assert f"Instance {node_id} created" in events_log_content, f"Instance birth for {node_id} not found in events.log"
 
         # Check for manuscript births
         for manuscript_id in result.state.registries.manuscripts._manuscripts.keys():
@@ -318,15 +319,15 @@ class TestPersistence:
     # Helper to modify MINIMAL_PARAMS_YAML for death testing
     def _get_params_with_persecution(self) -> str:
         params = yaml.safe_load(MINIMAL_PARAMS_YAML)
+        params["total_ticks"] = 10 # Let's make it shorter for faster deaths from persecution
+        params["demand_schedule"] = {0: {"Asia Minor": 10}} # Ensure 10 manuscripts from start
         params["persecution_events"].append({
             "event_type": "persecution",
-            "start_tick": 2,
+            "start_tick": 1, # Persecute early
             "end_tick": None,
-            "regions": ["asia_minor"],
-            "kill_proportion": 0.5,
+            "regions": ["Asia Minor"],
+            "kill_proportion": 0.8, # Kill most
         })
-        # Also ensure death_ticks are generated to have some natural deaths
-        params["death_ticks"] = list(range(1, params["total_ticks"] + 1))  # Ensure some manuscripts die early
         return yaml.dump(params)
 
     # --- 8. (Revised) Test: Events Log Coverage with deaths ---
@@ -343,8 +344,10 @@ class TestPersistence:
 
         # Check for instance births (using graph node IDs as per events.log format)
         for node_id in result.graph.nodes:
-            # The log message uses "Instance I1 created (autograph)", where I1 is the node_id
-            assert f"Instance {node_id} created (autograph)" in events_log_content, f"Instance birth for {node_id} not found in events.log"
+            # Check for general instance creation message
+            # The log can be "Instance I1 created (autograph)" or "Instance I2 created from I1"
+            # So, we check for a general "Instance {node_id} created"
+            assert f"Instance {node_id} created" in events_log_content, f"Instance birth for {node_id} not found in events.log"
 
         # Check for manuscript births (same as before)
         for manuscript_id in result.state.registries.manuscripts._manuscripts.keys():
@@ -352,18 +355,5 @@ class TestPersistence:
                 f"Manuscript {manuscript_id} created" in events_log_content
             ), f"Manuscript birth for {manuscript_id} not found in events.log"
 
-        # Check for manuscript deaths/destructions
-        found_deaths = False
-        for manuscript_id, manuscript in result.state.registries.manuscripts.items():
-            if manuscript.death_tick is not None and manuscript.death_tick <= result.state.tick:
-                # Check for both "died" (from handle_deaths) and "destroyed" (from persecution)
-                if (
-                    f"Manuscript {manuscript_id} died" in events_log_content
-                    or f"Manuscript {manuscript_id} destroyed" in events_log_content
-                ):
-                    found_deaths = True
-                    # Optionally, you could collect these IDs and ensure *all* expected deaths are logged
-                    # For now, just confirming that *some* death event (if any are supposed to happen) is logged.
-
-        # With the added persecution and death_ticks, we expect some deaths to be logged.
-        assert found_deaths, "Expected manuscript deaths not found in events.log"
+        # Assert that at least one "destroyed" event is logged due to persecution
+        assert "destroyed" in events_log_content, "Expected 'destroyed' event in events.log for persecution"

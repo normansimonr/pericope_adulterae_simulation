@@ -50,6 +50,7 @@ from pasim.config.schema import SimulationConfig, get_demand_for_tick
 from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.genealogy import add_child_node, add_root_node
 from pasim.core.historical_events import HistoricalEventManager
+from pasim.core.lifespan import sample_lifespan
 from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.reputation import sample_reputation
 from pasim.core.scribal_rules import apply_scribal_rule
@@ -137,7 +138,6 @@ def handle_migration(
 def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
     demand_today: Dict[Region, int],
-    death_ticks: Deque[int],
     params: SimulationConfig,
     rng: RNG,
     material_transition_manager: MaterialTransitionManager,
@@ -191,9 +191,6 @@ def _spawn_new_manuscripts_from_demand(
         if demanded_count > stock_count:
             # Spawn new manuscripts
             for _ in range(demanded_count - stock_count):
-                if not death_ticks:
-                    raise ValueError("Ran out of pre-generated death ticks.")
-
                 # 1. Create Manuscript
                 manuscript_id = f"M{next(state.manuscript_id_counter)}"
                 location = generate_random_coordinates(region, rng)
@@ -201,10 +198,14 @@ def _spawn_new_manuscripts_from_demand(
 
                 material = material_transition_manager.get_material_for_tick(current_tick, rng)
 
+                # Probabilistically determine lifespan and death tick
+                lifespan = sample_lifespan(material=material, region=region, rng=rng)
+                death_tick = current_tick + lifespan
+
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
                     birth_tick=current_tick,
-                    death_tick=death_ticks.popleft(),
+                    death_tick=death_tick,
                     material=material,
                     region=region,
                     location=location,
@@ -317,7 +318,6 @@ def _spawn_new_manuscripts_from_demand(
 def advance_tick(
     state: GenerationState,
     demand_today: Dict[Region, int],
-    death_ticks: Deque[int],
     params: SimulationConfig,
     rng: RNG,
     event_manager: HistoricalEventManager,
@@ -359,7 +359,6 @@ def advance_tick(
     state = _spawn_new_manuscripts_from_demand(
         state,
         demand_today,
-        death_ticks,
         params,
         rng,
         material_transition_manager,
@@ -402,7 +401,6 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
 
     # 2. Initialize state and managers
     state = initialise_generation_state()
-    death_ticks = deque(config.death_ticks)
 
     event_configs = [p.dict() for p in config.persecutions]
     for event_config in event_configs:
@@ -420,7 +418,6 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
         state = advance_tick(
             state=state,
             demand_today=demand_today,
-            death_ticks=death_ticks,
             params=config,
             rng=rng,
             event_manager=event_manager,

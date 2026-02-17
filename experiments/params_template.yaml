@@ -55,20 +55,7 @@ reputation_distribution:
   4: 0.2
   5: 0.2
 
-# death_ticks (List[int], required): A pre-generated list of death ticks for new manuscripts.
-# The simulation will draw from this list to assign a death_tick to each new manuscript.
-# The length of this list should ideally be sufficient for the total number of manuscripts
-# expected to be created across all ticks to avoid simulation errors in long runs.
-death_ticks:
-  - 20 # Example: First manuscript dies at tick 20
-  - 30
-  - 40
-  - 50
-  - 60
-  - 70
-  - 80
-  - 90
-  - 100
+
 
 # persecutions (List[PersecutionEventConfig], optional): A list of historical "shock" events.
 # Each entry defines a persecution that can destroy a fraction of manuscripts in specific regions.

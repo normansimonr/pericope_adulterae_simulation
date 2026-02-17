@@ -43,7 +43,6 @@ script_transitions:
 demand_schedule:
   0:
     Asia Minor: 1
-death_ticks: [1, 2]
 n_runs: 1
 max_retries: 0
 seed: 12345

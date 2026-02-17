@@ -29,13 +29,14 @@ from pasim.core.state import Manuscript, Material, Region, Script, Witness
 from pasim.core.text_initialisation import make_initial_text
 
 
+from pasim.core.lifespan import sample_lifespan
+
 def _create_initial_state(
     rng: np.random.Generator,
     manuscript_counts: Dict[Region, int],
     config: SimulationConfig,
     state_collector_fixture: List[GenerationState],
     start_tick: int = 0,
-    death_tick: int = 100,  # Re-added
 ) -> GenerationState:
     """Helper to create a generation state with a set number of manuscripts in specific regions."""
     state = initialise_generation_state()
@@ -48,11 +49,17 @@ def _create_initial_state(
             witness_id = f"W_{region.name}_{i}"
             instance_id = f"I_{region.name}_{i}"
 
+            # Assume PARCHMENT for initial state for simplicity, as it was before.
+            # Lifespan is now sampled based on material and region.
+            material = Material.PARCHMENT
+            lifespan = sample_lifespan(material=material, region=region, rng=rng)
+            death_tick_for_initial_manuscript = start_tick + lifespan
+
             manuscript = Manuscript(
                 manuscript_id=manuscript_id,
                 birth_tick=start_tick,
-                death_tick=death_tick,
-                material=Material.PARCHMENT,
+                death_tick=death_tick_for_initial_manuscript,
+                material=material,
                 region=region,
                 location=(rng.random(), rng.random()),
             )
@@ -110,7 +117,6 @@ def test_persecution_correctness(state_collector_fixture: List[GenerationState])
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        death_ticks=[],
         demand_schedule={0: {}},
     )
 
@@ -175,7 +181,6 @@ def test_persecution_determinism(state_collector_fixture: List[GenerationState])
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        death_ticks=[],
         demand_schedule={0: {}},
     )
 
@@ -220,11 +225,11 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     material_schedule = [
         {
             "start_tick": 0,
-            "distribution": {"papyrus": 1.0, "parchment": 0.0, "paper": 0.0},
+            "distribution": {"papyrus": 1.0},
         },
         {
             "start_tick": 5,
-            "distribution": {"papyrus": 0.0, "parchment": 0.0, "paper": 1.0},
+            "distribution": {"parchment": 1.0},
         },
     ]
     material_manager = MaterialTransitionManager(material_schedule)
@@ -244,18 +249,7 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
             4: 0.2,
             5: 0.2,
         },  # Dummy 5-point distribution
-        "death_ticks": [
-            100,
-            101,
-            102,
-            103,
-            104,
-            105,
-            106,
-            107,
-            108,
-            109,
-        ],  # Sufficient number
+
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
@@ -277,7 +271,7 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     assert initial_manuscript.material == Material.PARCHMENT
 
     # 3. Simulate spawning across the transition boundary
-    test_death_ticks = deque(dummy_simulation_config.death_ticks)
+
 
     # Tick 2: Before transition (demand = 2, alive = 1 -> spawn 1)
     state.tick = 2
@@ -285,7 +279,7 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_2,
-        test_death_ticks,
+
         dummy_simulation_config,
         rng,
         material_manager,
@@ -298,7 +292,7 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_6,
-        test_death_ticks,
+
         dummy_simulation_config,
         rng,
         material_manager,
@@ -316,11 +310,10 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     assert m_tick2.birth_tick == 2
     assert m_tick2.material == Material.PAPYRUS
 
-    # Manuscript spawned at tick 6 should be PAPER
+    # Manuscript spawned at tick 6 should be PARCHMENT
     m_tick6 = manuscripts[2][1]
     assert m_tick6.birth_tick == 6
-    assert m_tick6.material == Material.PAPER
-
+    assert m_tick6.material == Material.PARCHMENT
 
 def test_script_transition(state_collector_fixture: List[GenerationState]):
     """Verify newly spawned witnesses use scripts based on the active schedule."""
@@ -346,18 +339,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
             4: 0.2,
             5: 0.2,
         },  # Dummy 5-point distribution
-        "death_ticks": [
-            100,
-            101,
-            102,
-            103,
-            104,
-            105,
-            106,
-            107,
-            108,
-            109,
-        ],  # Sufficient number
+
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
@@ -378,7 +360,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
     assert initial_witness.script == Script.UNCIAL
 
     # 3. Simulate spawning across the transition boundary
-    test_death_ticks = deque(dummy_simulation_config.death_ticks)
+
 
     # Tick 2: Before transition
     state.tick = 2
@@ -386,7 +368,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_2,
-        test_death_ticks,
+
         dummy_simulation_config,
         rng,
         material_manager,
@@ -399,7 +381,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_6,
-        test_death_ticks,
+
         dummy_simulation_config,
         rng,
         material_manager,
@@ -445,7 +427,7 @@ def test_demand_schedule(state_collector_fixture: List[GenerationState]):
             4: 0.2,
             5: 0.2,
         },  # Example 5-point distribution
-        "death_ticks": [100] * 20,  # Example death ticks
+
         "persecutions": [],
         "material_transitions": material_schedule_config,
         "script_transitions": script_schedule_config,
@@ -476,11 +458,11 @@ def test_demand_schedule(state_collector_fixture: List[GenerationState]):
     state.tick = 5
 
     demand_today_tick_5 = get_demand_for_tick(dummy_full_params, state.tick)
-    test_death_ticks_spawn = deque([100] * 10)  # Enough death ticks for spawning test
+
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_5,
-        test_death_ticks_spawn,
+
         dummy_simulation_config,
         rng,
         material_manager,
@@ -507,7 +489,7 @@ def test_demand_schedule(state_collector_fixture: List[GenerationState]):
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_12,
-        test_death_ticks_spawn,  # Reuse deque or create new if needed
+  # Reuse deque or create new if needed
         dummy_simulation_config,
         rng,
         material_manager,
@@ -591,7 +573,6 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        death_ticks=[],
         demand_schedule=DemandScheduleConfig(root={0: {}}),
     )
 
@@ -621,7 +602,6 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        death_ticks=[],
         demand_schedule=DemandScheduleConfig(root={0: {}}),
     )
     rng_context = RNGContext(seed=1)

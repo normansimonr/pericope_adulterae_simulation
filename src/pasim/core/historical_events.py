@@ -137,7 +137,13 @@ class PersecutionEvent(HistoricalEvent):
         eligible_array = np.array(list(eligible_manuscript_ids), dtype=object)
         victims_ids = rng.choice(eligible_array, size=n_to_destroy, replace=False)
 
-        # 4. Kill them (remove from alive set)
+        # 4. Kill them (remove from alive set and set death_tick)
+        for victim_id in victims_ids:
+            victim_manuscript = state.registries.manuscripts.get(victim_id)
+            victim_manuscript.death_tick = state.tick # Set death_tick to current tick
+            state.telemetry.append(
+                {"tick": state.tick, "event_type": "manuscript_destroyed", "manuscript_id": victim_id}
+            )
         state.alive_manuscripts.difference_update(victims_ids)
 
 

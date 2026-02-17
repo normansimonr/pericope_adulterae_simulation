@@ -168,7 +168,6 @@ class SimulationConfig(BaseModel):
     p_region_migration: float = Field(0.0, ge=0.0, le=1.0)
     p_internal_relocation: float = Field(0.0, ge=0.0, le=1.0)
     reputation_distribution: Dict[int, float]
-    death_ticks: List[int]
 
     persecutions: List[PersecutionEventConfig] = []
     material_transitions: List[MaterialTransitionConfig] = []
