@@ -20,9 +20,9 @@ pasim = "pasim.cli:main"
 pytest = "*"
 mypy = "*"
 ruff = "*"
-pre-commit = "*"
 types-networkx = "*"
 types-pyyaml = "*"
+pre-commit = "^4.5.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

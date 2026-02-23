@@ -406,6 +406,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
     for event_config in event_configs:
         event_config["event_type"] = "persecution"
 
+    print(f"DEBUG: Event configs for HistoricalEventManager: {event_configs}") # Added temporary debug
     event_manager = HistoricalEventManager(event_configs)
 
     material_transition_manager = MaterialTransitionManager([m.dict() for m in config.material_transitions])

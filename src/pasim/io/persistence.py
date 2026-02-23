@@ -219,28 +219,19 @@ def _save_events_log(run_dir: Path, result: "SimulationResult"):
     for ms_id, manuscript in result.state.registries.manuscripts.items():
         events.append({"tick": manuscript.birth_tick, "type": "manuscript_birth", "id": ms_id})
 
-    # Collect all death-related events from telemetry, which is the source of truth for dynamic events
+    # Collect all explicit destruction events from telemetry
+    destroyed_manuscript_ids = set()
     for entry in result.state.telemetry:
         if entry.get("event_type") == "manuscript_destroyed":
             events.append({"tick": entry["tick"], "type": "manuscript_destroyed", "id": entry["manuscript_id"]})
-        # We can also add natural death from telemetry here if it were logged,
-        # but currently natural death is inferred from manuscript.death_tick.
+            destroyed_manuscript_ids.add(entry["manuscript_id"])
 
-    # Now, handle natural manuscript deaths not covered by 'destroyed' events in telemetry
-    # This ensures every manuscript's final state is accounted for
+    # Collect natural death events for manuscripts not already marked as destroyed
     for ms_id, manuscript in result.state.registries.manuscripts.items():
         if manuscript.death_tick is not None and manuscript.death_tick != float("inf"):
-            # Check if this death was already logged as 'destroyed'
-            is_destroyed_by_event = any(
-                entry.get("event_type") == "manuscript_destroyed"
-                and entry.get("manuscript_id") == ms_id
-                and entry.get("tick") == manuscript.death_tick
-                for entry in events # check against already added events, not just telemetry.
-            )
-            if not is_destroyed_by_event:
-                 # It's a natural death if not a destroyed event
+            # Only log a natural death if the manuscript was NOT destroyed by an event
+            if ms_id not in destroyed_manuscript_ids:
                 events.append({"tick": manuscript.death_tick, "type": "manuscript_death", "id": ms_id})
-
 
     # Infer instance birth events (from graph nodes)
     for node_id, data in result.graph.nodes(data=True):
@@ -258,7 +249,7 @@ def _save_events_log(run_dir: Path, result: "SimulationResult"):
                 f.write(f"[TICK {event['tick']}] Manuscript {event['id']} created\n")
             elif event["type"] == "manuscript_death":
                 f.write(f"[TICK {event['tick']}] Manuscript {event['id']} died\n")
-            elif event["type"] == "manuscript_destroyed": # Added logging for destroyed event
+            elif event["type"] == "manuscript_destroyed":  # Added logging for destroyed event
                 f.write(f"[TICK {event['tick']}] Manuscript {event['id']} destroyed\n")
             elif event["type"] == "instance_birth":
                 if event["parents"]:

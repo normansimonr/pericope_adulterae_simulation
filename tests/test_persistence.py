@@ -321,7 +321,7 @@ class TestPersistence:
         params = yaml.safe_load(MINIMAL_PARAMS_YAML)
         params["total_ticks"] = 10 # Let's make it shorter for faster deaths from persecution
         params["demand_schedule"] = {0: {"Asia Minor": 10}} # Ensure 10 manuscripts from start
-        params["persecution_events"].append({
+        params["persecutions"].append({
             "event_type": "persecution",
             "start_tick": 1, # Persecute early
             "end_tick": None,
