@@ -41,11 +41,12 @@ Explicit Exclusions:
 - Batch execution or file I/O.
 """
 
+from math import ceil
 from typing import Any, Dict, List, Optional
 
 from numpy.random import Generator as RNG
 
-from pasim.config.schema import SimulationConfig, get_demand_for_tick
+from pasim.config.schema import SimulationConfig
 from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.genealogy import add_child_node, add_root_node
 from pasim.core.historical_events import HistoricalEventManager
@@ -58,6 +59,66 @@ from pasim.core.simulation_state import GenerationState, initialise_generation_s
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.state import DeathReason, Manuscript, Region, Witness
 from pasim.core.text_initialisation import make_initial_text
+
+# --- Regional Demand Allocation ---
+REGIONAL_DISTRIBUTIONS = {
+    # Centuries 0-2 (0-299 years)
+    (0, 2): {
+        Region.ASIA_MINOR: 0.70,
+        Region.LEVANT: 0.25,
+        Region.EGYPT: 0.05,
+    },
+    # Centuries 3-5 (300-599 years)
+    (3, 5): {
+        Region.ASIA_MINOR: 0.55,
+        Region.LEVANT: 0.25,
+        Region.EGYPT: 0.20,
+    },
+    # Century 6 onwards (>= 600 years)
+    (6, None): {  # None indicates "onwards"
+        Region.ASIA_MINOR: 1.00,
+        Region.LEVANT: 0.00,
+        Region.EGYPT: 0.00,
+    },
+}
+
+
+def _get_regional_distribution_for_century(century: int) -> Dict[Region, float]:
+    """Determines the appropriate regional distribution for a given century."""
+    for (start_century, end_century), distribution in REGIONAL_DISTRIBUTIONS.items():
+        if end_century is None:  # Century 6 onwards
+            if century >= start_century:
+                return distribution
+        elif start_century <= century <= end_century:
+            return distribution
+    # Default to the latest distribution if century is beyond defined ranges
+    return REGIONAL_DISTRIBUTIONS[(6, None)]
+
+
+def _allocate_demand(tick: int, aggregate_demand: int) -> Dict[Region, int]:
+    """
+    Deterministically allocates aggregate demand across regions based on the
+    century of the current tick, using ceiling rounding for each region.
+
+    Args:
+        tick: The current simulation tick (1 tick = 1 year).
+        aggregate_demand: The total demand for new manuscripts at this tick.
+
+    Returns:
+        A dictionary mapping Region enums to allocated integer demand counts.
+    """
+    if aggregate_demand == 0:
+        return {region: 0 for region in Region}
+
+    century = tick // 100  # 1 tick = 1 year, so century = floor(tick / 100)
+    distribution = _get_regional_distribution_for_century(century)
+
+    regional_demand: Dict[Region, int] = {}
+    for region, proportion in distribution.items():
+        # Round up (ceiling) for each region independently
+        regional_demand[region] = ceil(aggregate_demand * proportion)
+
+    return regional_demand
 
 
 def handle_deaths(state: GenerationState) -> GenerationState:
@@ -414,7 +475,14 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
 
     # 3. Run simulation loop
     for _ in range(config.total_ticks):
-        demand_today = get_demand_for_tick(parameters, state.tick + 1)
+        current_tick = state.tick + 1  # Demand is calculated for the *next* tick
+        # Get aggregate demand for the current tick, using last known value if not explicitly defined
+        aggregate_demand_for_tick = config.demand_schedule.root.get(
+            current_tick, config.demand_schedule.root.get(max(config.demand_schedule.root.keys()), 0)
+        )
+
+        # Allocate aggregate demand to regions
+        demand_today = _allocate_demand(current_tick, aggregate_demand_for_tick)
 
         state = advance_tick(
             state=state,

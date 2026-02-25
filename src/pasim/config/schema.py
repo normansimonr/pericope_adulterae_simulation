@@ -28,7 +28,7 @@ are configured separately:
     input to the simulation's core spawning logic.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -109,54 +109,17 @@ class ScriptTransitionConfig(BaseModel):
         return v
 
 
-class DemandScheduleConfig(RootModel[Dict[int, Dict[Region, int]]]):
+class DemandScheduleConfig(RootModel[Dict[int, int]]):
     """Configuration for the demand schedule."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def convert_region_strings_to_enums(cls, raw_data: Any) -> Any:
-        """
-        Converts string keys in the nested demand dictionaries to Region enum members.
-        This runs *before* Pydantic's default validation, allowing the rest of the
-        validation chain to operate on Region enums.
-        """
-        if not isinstance(raw_data, dict):
-            return raw_data  # Let Pydantic handle basic type validation
-
-        converted_data = {}
-        for tick, demands_by_string_region in raw_data.items():
-            if not isinstance(demands_by_string_region, dict):
-                # Pydantic will raise error later if not dict, but for cleaner error message:
-                raise ValueError(f"Demand value for tick {tick} must be a dictionary, got {type(demands_by_string_region)}")
-
-            converted_demands = {}
-            for region_name, count in demands_by_string_region.items():
-                try:
-                    region_enum = Region(region_name)
-                except ValueError:
-                    raise ValueError(
-                        f"Invalid region '{region_name}' in demand schedule at tick {tick}. Must be one of {[r.value for r in Region]}"
-                    )
-                converted_demands[region_enum] = count
-            converted_data[tick] = converted_demands
-        return converted_data
 
     @model_validator(mode="after")
     def validate_demand_schedule(self):
         """Validates the demand schedule after region strings have been converted to enums."""
-        for tick, demands in self.root.items():
+        for tick, aggregate_demand in self.root.items():
             if not isinstance(tick, int) or tick < 0:
                 raise ValueError(f"Invalid tick '{tick}' in demand schedule. Must be a non-negative integer.")
-            for (
-                region_enum,
-                count,
-            ) in demands.items():  # Now region_enum is already a Region object
-                if not isinstance(region_enum, Region):  # Should not happen if 'before' validator works
-                    raise TypeError(f"Region key for tick {tick} is not a Region enum, got {type(region_enum)}")
-                if not isinstance(count, int) or count < 0:
-                    raise ValueError(
-                        f"Invalid demand count '{count}' for region '{region_enum.value}' at tick {tick}. Must be a non-negative integer."
-                    )
+            if not isinstance(aggregate_demand, int) or aggregate_demand < 0:
+                raise ValueError(f"Invalid aggregate demand count '{aggregate_demand}' for tick {tick}. Must be a non-negative integer.")
         return self
 
 
@@ -218,22 +181,3 @@ def get_material_schedule(params: dict) -> List[dict]:
 def get_script_schedule(params: dict) -> List[dict]:
     """Returns the validated script transition schedule."""
     return [s.model_dump() for s in SimulationConfig(**params).script_transitions]
-
-
-def get_demand_for_tick(params: dict, tick: int) -> Dict[Region, int]:
-    """
-    Returns the demand for a specific tick, using the last known value
-    if the tick is not explicitly defined.
-    """
-    schedule = SimulationConfig(**params).demand_schedule.root
-
-    if tick in schedule:
-        return schedule[tick]
-
-    # Find the last known tick before the current tick
-    available_ticks = sorted([t for t in schedule.keys() if t < tick])
-    if not available_ticks:
-        return {}
-
-    last_known_tick = available_ticks[-1]
-    return schedule[last_known_tick]

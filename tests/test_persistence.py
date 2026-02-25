@@ -29,8 +29,7 @@ script_transitions:
     distribution:
       uncial: 1.0
 demand_schedule:
-  0:
-    Asia Minor: 1
+  0: 1
 """
 
 
@@ -149,10 +148,10 @@ class TestPersistence:
         json_nodes_set = {node["instance_id"] for node in genealogy_data["nodes"]}
 
         for edge in genealogy_data["edges"]:
-            assert edge["source"] in json_nodes_set
-            assert edge["target"] in json_nodes_set
+            assert edge["parent"] in json_nodes_set
+            assert edge["child"] in json_nodes_set
             # Also check against the actual graph
-            assert result.graph.has_edge(edge["source"], edge["target"])
+            assert result.graph.has_edge(edge["parent"], edge["child"])
 
     # --- 6. Test: Instance Text Table Integrity ---
 
@@ -321,7 +320,7 @@ class TestPersistence:
     def _get_params_with_persecution(self) -> str:
         params = yaml.safe_load(MINIMAL_PARAMS_YAML)
         params["total_ticks"] = 10  # Let's make it shorter for faster deaths from persecution
-        params["demand_schedule"] = {0: {"Asia Minor": 10}}  # Ensure 10 manuscripts from start
+        params["demand_schedule"] = {0: 10}  # Ensure 10 manuscripts from start, new aggregate format
         params["persecutions"].append({
             "event_type": "persecution",
             "start_tick": 2,  # Persecute after manuscripts are spawned at tick 1

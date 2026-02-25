@@ -1,0 +1,33 @@
+total_ticks: 10
+n_runs: 1
+max_retries: 3
+seed: null
+text_length: 200
+p_region_migration: 0.01
+p_internal_relocation: 0.05
+reputation_distribution:
+  1: 0.1
+  2: 0.2
+  3: 0.4
+  4: 0.2
+  5: 0.1
+
+persecutions: []
+material_transitions:
+  - start_tick: 0
+    distribution:
+      papyrus: 1.0
+      parchment: 0.0
+      paper: 0.0
+script_transitions:
+  - start_tick: 0
+    distribution:
+      uncial: 1.0
+      minuscule: 0.0
+demand_schedule:
+  0:
+    "Asia Minor": 1
+    "Egypt": 1
+  5:
+    "Asia Minor": 2
+    "Egypt": 1

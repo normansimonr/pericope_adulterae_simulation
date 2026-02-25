@@ -95,20 +95,18 @@ script_transitions:
   #     uncial: 0.3
   #     minuscule: 0.7
 
-# demand_schedule (Dict[int, Dict[Region, int]], required): Defines the demand for new manuscripts
-# across different regions over time. The simulation will attempt to spawn new manuscripts
-# to meet these minimum numbers. If a tick is not explicitly defined, the last known demand
-# value for that region is used.
+# demand_schedule (Dict[int, int], required): Defines the *aggregate* demand for new manuscripts
+# across all regions for specific ticks. The simulation will internally distribute this aggregate
+# demand across regions using a deterministic historical allocation rule.
+#
+# The allocation rule depends on the century of the tick (1 tick = 1 year, century = floor(tick / 100)):
+#   - Centuries 0-2 (0-299 years): Asia Minor: 70%, Levant: 25%, Egypt: 5%
+#   - Centuries 3-5 (300-599 years): Asia Minor: 55%, Levant: 25%, Egypt: 20%
+#   - Century 6 onwards (>= 600 years): Asia Minor: 100%, Levant: 0%, Egypt: 0%
+#
+# When distributing, regional demands are rounded *up* (ceiling) independently.
+# Total demand may exceed the aggregate demand due to rounding.
+# If a tick is not explicitly defined, the last known aggregate demand value is used.
 demand_schedule:
-  0: # Demand at tick 0
-    Asia Minor: 1 # At tick 0, ensure 1 manuscript in Asia Minor
-    Egypt: 0
-    Levant: 0
-  # 10: # Demand at tick 10
-  #   Asia Minor: 2
-  #   Egypt: 1
-  #   Levant: 0
-  # 20: # Demand at tick 20 (and all subsequent ticks until a new entry)
-  #   Asia Minor: 3
-  #   Egypt: 2
-  #   Levant: 1
+  0: 10 # Example: At tick 0, aggregate demand for new manuscripts is 10.
+  # 10: 20 # Example: At tick 10, aggregate demand for new manuscripts is 20.

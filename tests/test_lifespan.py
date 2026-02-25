@@ -1,13 +1,10 @@
-import pytest
 import numpy as np
-from collections import deque
-from typing import Dict
+import pytest
 
-from pasim.config.schema import SimulationConfig
-from pasim.core.lifespan import sample_lifespan, LOGNORMAL_PARAMETERS
+from pasim.core.genealogy_generator import run_genealogy_generator
+from pasim.core.lifespan import LOGNORMAL_PARAMETERS, sample_lifespan
 from pasim.core.rng import RNGContext
 from pasim.core.state import Material, Region
-from pasim.core.genealogy_generator import run_genealogy_generator
 
 
 # Helper to create a dummy config for run_genealogy_generator
@@ -21,16 +18,10 @@ def get_dummy_config(total_ticks=10, text_length=10, reputation_distribution=Non
         "p_internal_relocation": 0.0,
         "reputation_distribution": reputation_distribution,
         "persecutions": [],
-        "material_transitions": [
-            {"start_tick": 0, "distribution": {"papyrus": 1.0}}
-        ],
-        "script_transitions": [
-            {"start_tick": 0, "distribution": {"uncial": 1.0}}
-        ],
-        "demand_schedule": {
-            0: {"Asia Minor": 1, "Egypt": 1}
-        },
-        **kwargs
+        "material_transitions": [{"start_tick": 0, "distribution": {"papyrus": 1.0}}],
+        "script_transitions": [{"start_tick": 0, "distribution": {"uncial": 1.0}}],
+        "demand_schedule": {0: {"Asia Minor": 1, "Egypt": 1}},
+        **kwargs,
     }
     return config_dict
 
@@ -138,13 +129,8 @@ def test_simulation_runs_without_death_ticks_config():
     # Create a config that does NOT have 'death_ticks'
     config_dict = get_dummy_config(
         total_ticks=5,
-        demand_schedule={
-            0: {"Asia Minor": 1},
-            1: {"Egypt": 1}
-        },
-        material_transitions=[
-            {"start_tick": 0, "distribution": {"papyrus": 1.0}}
-        ],
+        demand_schedule={0: 1, 1: 1},  # New aggregate format
+        material_transitions=[{"start_tick": 0, "distribution": {"papyrus": 1.0}}],
     )
 
     # Should not raise an error related to missing death_ticks
@@ -169,16 +155,11 @@ def test_death_tick_calculation_integration():
     Verify that death_tick is correctly calculated as birth_tick + lifespan
     when a manuscript is spawned during a simulation run.
     """
-    initial_manuscript_count = 0
+
     config_dict = get_dummy_config(
         total_ticks=2,
-        demand_schedule={
-            0: {"Asia Minor": 1, "Egypt": 1},
-            1: {"Levant": 1}
-        },
-        material_transitions=[
-            {"start_tick": 0, "distribution": {"papyrus": 0.5, "parchment": 0.5}}
-        ],
+        demand_schedule={0: 2, 1: 1},  # New aggregate format (1+1=2, 1=1)
+        material_transitions=[{"start_tick": 0, "distribution": {"papyrus": 0.5, "parchment": 0.5}}],
     )
 
     rng = RNGContext(seed=12345).spawn(1)[0]
@@ -189,14 +170,14 @@ def test_death_tick_calculation_integration():
         # Create a temporary RNG for just this manuscript's lifespan sampling to check
         # This is okay because we know the order of manuscript creation and thus RNG calls
         # for a given overall simulation seed.
-        
+
         # To get the exact RNG state at the point of sampling, we would need to pass
         # a *child* RNG to the lifespan sampler in `genealogy_generator`.
         # For this test, we'll re-seed a new RNG for each manuscript to verify
         # that `sample_lifespan` itself works correctly for the parameters.
         # A more robust test for full determinism would involve capturing the RNG
         # state inside `genealogy_generator` or using a mock.
-        
+
         # For now, we'll verify that the *concept* of lifespan is applied.
         # The exact value depends on the RNG state at the time of sampling.
         # We can't easily reproduce the exact RNG state for each individual manuscript
@@ -206,7 +187,7 @@ def test_death_tick_calculation_integration():
 
         # So, instead, let's just ensure that death_tick > birth_tick, which implies a positive lifespan.
         assert manuscript.death_tick > manuscript.birth_tick
-        
+
         # A more direct test of lifespan itself would be to make the _spawn_new_manuscripts_from_demand
         # function return the sampled lifespan or to mock the sample_lifespan function
         # in isolation. Given the scope, ensuring death_tick > birth_tick is sufficient
@@ -216,16 +197,15 @@ def test_death_tick_calculation_integration():
         # falls within a plausible range for its material and region based on the lognormal parameters.
         # This is a less strict test than direct equality but ensures the sampling is active.
         sampled_lifespan = manuscript.death_tick - manuscript.birth_tick
-        
+
         # Retrieve mu and sigma from the global LOGNORMAL_PARAMETERS
         material_params = LOGNORMAL_PARAMETERS.get(manuscript.material)
         assert material_params is not None
-        
+
         region_matched = False
         for region_group, params in material_params.items():
-            if (
-                (isinstance(region_group, Region) and region_group == manuscript.region)
-                or (isinstance(region_group, tuple) and manuscript.region in region_group)
+            if (isinstance(region_group, Region) and region_group == manuscript.region) or (
+                isinstance(region_group, tuple) and manuscript.region in region_group
             ):
                 mu, sigma = params["mu"], params["sigma"]
                 region_matched = True
@@ -234,7 +214,7 @@ def test_death_tick_calculation_integration():
 
         # Expected mean of the lognormal distribution is exp(mu + sigma^2 / 2)
         expected_mean_lifespan = np.exp(mu + sigma**2 / 2)
-        
+
         # Set a very broad plausible range for the individual sampled lifespan
         # This is not a statistical test, just ensuring it's not wildly off.
         # For instance, within 0.1x to 10x the mean, which is extremely generous for lognormal.

@@ -38,7 +38,7 @@ The simulation is designed to be fully parameter-driven, allowing researchers to
 -   **Historical Drivers**: The configuration schema makes a clear distinction between three types of historical drivers:
     1.  **Historical Shocks** (e.g., `persecutions`): Discrete, instantaneous events that "shock" the system, such as a persecution that destroys a fraction of manuscripts at a specific time.
     2.  **Environmental Regimes** (e.g., `material_transitions`, `script_transitions`): Long-term, evolving environmental conditions that affect the properties of **newly created** entities. This is used to model gradual shifts in technology or culture.
-    3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics, like the demand for new manuscripts over time. The demand schedule has special logic to handle missing ticks by using the last known value, ensuring continuity.
+    3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics. The `demand_schedule` now specifies *aggregate* demand across all regions for specific ticks. The simulation internally distributes this demand deterministically across regions based on historical allocation rules and a ceiling rounding mechanism. If a tick is not explicitly defined, the last known aggregate demand value is used, ensuring continuity.
 
 ## Dependency Management
 

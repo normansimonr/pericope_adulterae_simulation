@@ -41,8 +41,7 @@ script_transitions:
     distribution:
       uncial: 1.0
 demand_schedule:
-  0:
-    Asia Minor: 1
+  0: 1
 n_runs: 1
 max_retries: 0
 seed: 12345

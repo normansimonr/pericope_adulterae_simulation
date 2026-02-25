@@ -31,8 +31,7 @@ script_transitions:
     distribution:
       uncial: 1.0
 demand_schedule:
-  0:
-    Asia Minor: 1
+  0: 1
 n_runs: 3
 max_retries: 1 # Add max_retries for testing
 """
