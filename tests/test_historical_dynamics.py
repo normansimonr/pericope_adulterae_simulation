@@ -42,9 +42,7 @@ def _create_initial_state(
     state_collector_fixture.append(state)
     state.tick = start_tick
 
-        for region, count in manuscript_counts.items():
-            for i in range(count):
-                manuscript_id = f"M_{region.name}_{i}"
+    for region, count in manuscript_counts.items():
         for i in range(count):
             manuscript_id = f"M_{region.name}_{i}"
             witness_id = f"W_{region.name}_{i}"
@@ -345,13 +343,12 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
             4: 0.2,
             5: 0.2,
         },  # Dummy 5-point distribution
-
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
         "demand_schedule": {
-            0: 2, # Aggregate demand 2 at tick 0
-            6: 3, # Aggregate demand 3 at tick 6
+            0: 2,  # Aggregate demand 2 at tick 0
+            6: 3,  # Aggregate demand 3 at tick 6
         },
     }
     dummy_simulation_config = SimulationConfig(**dummy_config_data)
@@ -361,7 +358,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
     rng = rng_context.spawn(1)[0]
     state = initialise_generation_state()
     state_collector_fixture.append(state)
-    state.tick = 0 # Initial tick
+    state.tick = 0  # Initial tick
 
     # 3. Simulate spawning across the transition boundary
 
@@ -378,7 +375,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
         script_manager,
     )
     assert len(state.alive_manuscripts) == 4
-    assert len(state.registries.witnesses) == 4 # 4 witnesses for 4 spawned manuscripts
+    assert len(state.registries.witnesses) == 4  # 4 witnesses for 4 spawned manuscripts
 
     # Tick 6: Aggregate demand 3. Should spawn additional manuscripts.
     state.tick = 6
@@ -393,22 +390,24 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
         script_manager,
     )
     assert len(state.alive_manuscripts) == 5
-    assert len(state.registries.witnesses) == 5 # 5 witnesses total
+    assert len(state.registries.witnesses) == 5  # 5 witnesses total
 
     # 4. Assertions for spawned witnesses scripts
     # We need to find witnesses born at specific ticks and check their script.
 
     # Witnesses born at tick 2 should use 'uncial' distribution (from start_tick 0)
+    m_ids_tick2 = [m.manuscript_id for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 2]
     w_tick2 = next(
-        (w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in [m.manuscript_id for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 2]),
+        (w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in m_ids_tick2),
         None,
     )
     assert w_tick2 is not None, "No witness found born at tick 2"
     assert w_tick2.script == Script.UNCIAL
 
     # Witnesses born at tick 6 should use 'minuscule' distribution (from start_tick 5)
+    m_ids_tick6 = [m.manuscript_id for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 6]
     w_tick6 = next(
-        (w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in [m.manuscript_id for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 6]),
+        (w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in m_ids_tick6),
         None,
     )
     assert w_tick6 is not None, "No witness found born at tick 6"
