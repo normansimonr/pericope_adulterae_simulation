@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Set
 import numpy as np
 
 from .simulation_state import GenerationState
+from .state import DeathReason
 
 
 @dataclass
@@ -101,7 +102,7 @@ class PersecutionEvent(HistoricalEvent):
 
     def __post_init__(self):
         if not (0.0 <= self.kill_proportion <= 1.0):
-            raise ValueError("kill_proportion must be between 0.0 and 1.0, " f"but got {self.kill_proportion}")
+            raise ValueError(f"kill_proportion must be between 0.0 and 1.0, but got {self.kill_proportion}")
 
     def apply(self, state: GenerationState, rng: np.random.Generator) -> None:
         """
@@ -137,13 +138,11 @@ class PersecutionEvent(HistoricalEvent):
         eligible_array = np.array(list(eligible_manuscript_ids), dtype=object)
         victims_ids = rng.choice(eligible_array, size=n_to_destroy, replace=False)
 
-        # 4. Kill them (remove from alive set and set death_tick)
+        # 4. Kill them (remove from alive set and set death_tick/reason)
         for victim_id in victims_ids:
             victim_manuscript = state.registries.manuscripts.get(victim_id)
-            victim_manuscript.death_tick = state.tick # Set death_tick to current tick
-            state.telemetry.append(
-                {"tick": state.tick, "event_type": "manuscript_destroyed", "manuscript_id": victim_id}
-            )
+            victim_manuscript.death_tick = state.tick  # Set death_tick to current tick
+            victim_manuscript.death_reason = DeathReason.PERSECUTION  # Set explicit reason
         state.alive_manuscripts.difference_update(victims_ids)
 
 

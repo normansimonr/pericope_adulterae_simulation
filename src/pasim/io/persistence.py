@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, List, cast  # Added TYPE_CHECKING
 import numpy as np
 import pydantic  # For Pydantic models
 
+from pasim.core.state import DeathReason
+
 if TYPE_CHECKING:  # Added conditional import
     from pasim.execution.runner import SimulationResult
 
@@ -211,27 +213,21 @@ def _save_telemetry(run_dir: Path, result: "SimulationResult"):
 def _save_events_log(run_dir: Path, result: "SimulationResult"):
     """
     Generates and saves a chronological log of key simulation events.
-    Infers events from existing data in SimulationResult.
+    Infers events from the final state of the simulation result.
     """
     events = []
 
-    # Collect all manuscript birth events
+    # Collect manuscript birth and death events from the manuscript registry
     for ms_id, manuscript in result.state.registries.manuscripts.items():
         events.append({"tick": manuscript.birth_tick, "type": "manuscript_birth", "id": ms_id})
 
-    # Collect all explicit destruction events from telemetry
-    destroyed_manuscript_ids = set()
-    for entry in result.state.telemetry:
-        if entry.get("event_type") == "manuscript_destroyed":
-            events.append({"tick": entry["tick"], "type": "manuscript_destroyed", "id": entry["manuscript_id"]})
-            destroyed_manuscript_ids.add(entry["manuscript_id"])
-
-    # Collect natural death events for manuscripts not already marked as destroyed
-    for ms_id, manuscript in result.state.registries.manuscripts.items():
         if manuscript.death_tick is not None and manuscript.death_tick != float("inf"):
-            # Only log a natural death if the manuscript was NOT destroyed by an event
-            if ms_id not in destroyed_manuscript_ids:
-                events.append({"tick": manuscript.death_tick, "type": "manuscript_death", "id": ms_id})
+            # Use the new `death_reason` field to determine event type
+            if manuscript.death_reason == DeathReason.PERSECUTION:
+                event_type = "manuscript_destroyed"
+            else:  # Covers NATURAL and None as a fallback
+                event_type = "manuscript_death"
+            events.append({"tick": manuscript.death_tick, "type": event_type, "id": ms_id})
 
     # Infer instance birth events (from graph nodes)
     for node_id, data in result.graph.nodes(data=True):
@@ -240,7 +236,6 @@ def _save_events_log(run_dir: Path, result: "SimulationResult"):
         events.append(event_info)
 
     # Sort events chronologically
-    # Stable sort by tick, then by event type for consistent order
     events.sort(key=lambda x: (x["tick"], x["type"]))
 
     with open(run_dir / "events.log", "w") as f:
@@ -249,7 +244,7 @@ def _save_events_log(run_dir: Path, result: "SimulationResult"):
                 f.write(f"[TICK {event['tick']}] Manuscript {event['id']} created\n")
             elif event["type"] == "manuscript_death":
                 f.write(f"[TICK {event['tick']}] Manuscript {event['id']} died\n")
-            elif event["type"] == "manuscript_destroyed":  # Added logging for destroyed event
+            elif event["type"] == "manuscript_destroyed":
                 f.write(f"[TICK {event['tick']}] Manuscript {event['id']} destroyed\n")
             elif event["type"] == "instance_birth":
                 if event["parents"]:

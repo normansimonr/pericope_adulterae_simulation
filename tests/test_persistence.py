@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml
+
 from pasim.execution.runner import run_single
 
 # Minimal configuration for fast testing
@@ -18,7 +19,7 @@ reputation_distribution:
   3: 0.2
   4: 0.2
   5: 0.2
-persecution_events: []
+persecutions: []
 material_transitions:
   - start_tick: 0
     distribution:
@@ -189,9 +190,9 @@ class TestPersistence:
 
             # Check if all tokens are integers
             for token_str in tokens_str:
-                assert token_str.isdigit() or (
-                    token_str.startswith("-") and token_str[1:].isdigit()
-                ), f"Non-integer token found: {token_str}"
+                assert token_str.isdigit() or (token_str.startswith("-") and token_str[1:].isdigit()), (
+                    f"Non-integer token found: {token_str}"
+                )
 
             # If this is one of the instances we want to check, compare with in-memory
             if instance_id in instances_to_check:
@@ -227,9 +228,9 @@ class TestPersistence:
 
         # Check for manuscript births
         for manuscript_id in result.state.registries.manuscripts._manuscripts.keys():
-            assert (
-                f"Manuscript {manuscript_id} created" in events_log_content
-            ), f"Manuscript birth for {manuscript_id} not found in events.log"
+            assert f"Manuscript {manuscript_id} created" in events_log_content, (
+                f"Manuscript birth for {manuscript_id} not found in events.log"
+            )
 
         # If any deaths occurred, check if they are in the log
         # For minimal config, there might not be deaths. Let's adjust MINIMAL_PARAMS_YAML
@@ -309,24 +310,24 @@ class TestPersistence:
         assert original_graph_edge_count == len(result_before_rechecking.graph.edges), "Graph edge count mutated!"
 
         # Re-check manuscript registry
-        assert original_manuscript_registry_count == len(
-            result_before_rechecking.state.registries.manuscripts
-        ), "Manuscript registry count mutated!"
-        assert original_manuscript_ids == set(
-            result_before_rechecking.state.registries.manuscripts._manuscripts.keys()
-        ), "Manuscript IDs in registry mutated!"
+        assert original_manuscript_registry_count == len(result_before_rechecking.state.registries.manuscripts), (
+            "Manuscript registry count mutated!"
+        )
+        assert original_manuscript_ids == set(result_before_rechecking.state.registries.manuscripts._manuscripts.keys()), (
+            "Manuscript IDs in registry mutated!"
+        )
 
     # Helper to modify MINIMAL_PARAMS_YAML for death testing
     def _get_params_with_persecution(self) -> str:
         params = yaml.safe_load(MINIMAL_PARAMS_YAML)
-        params["total_ticks"] = 10 # Let's make it shorter for faster deaths from persecution
-        params["demand_schedule"] = {0: {"Asia Minor": 10}} # Ensure 10 manuscripts from start
+        params["total_ticks"] = 10  # Let's make it shorter for faster deaths from persecution
+        params["demand_schedule"] = {0: {"Asia Minor": 10}}  # Ensure 10 manuscripts from start
         params["persecutions"].append({
             "event_type": "persecution",
-            "start_tick": 1, # Persecute early
+            "start_tick": 2,  # Persecute after manuscripts are spawned at tick 1
             "end_tick": None,
             "regions": ["Asia Minor"],
-            "kill_proportion": 0.8, # Kill most
+            "kill_proportion": 0.8,  # Kill most
         })
         return yaml.dump(params)
 
@@ -351,9 +352,9 @@ class TestPersistence:
 
         # Check for manuscript births (same as before)
         for manuscript_id in result.state.registries.manuscripts._manuscripts.keys():
-            assert (
-                f"Manuscript {manuscript_id} created" in events_log_content
-            ), f"Manuscript birth for {manuscript_id} not found in events.log"
+            assert f"Manuscript {manuscript_id} created" in events_log_content, (
+                f"Manuscript birth for {manuscript_id} not found in events.log"
+            )
 
         # Assert that at least one "destroyed" event is logged due to persecution
         assert "destroyed" in events_log_content, "Expected 'destroyed' event in events.log for persecution"

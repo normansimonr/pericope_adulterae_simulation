@@ -41,8 +41,7 @@ Explicit Exclusions:
 - Batch execution or file I/O.
 """
 
-from collections import deque
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from numpy.random import Generator as RNG
 
@@ -57,7 +56,7 @@ from pasim.core.scribal_rules import apply_scribal_rule
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
 from pasim.core.spatial import generate_random_coordinates
-from pasim.core.state import Manuscript, Region, Witness
+from pasim.core.state import DeathReason, Manuscript, Region, Witness
 from pasim.core.text_initialisation import make_initial_text
 
 
@@ -65,13 +64,9 @@ def handle_deaths(state: GenerationState) -> GenerationState:
     """Processes manuscript deaths for the current tick.
 
     This function identifies manuscripts whose scheduled `death_tick` has
-    arrived and removes them from the set of `alive_manuscripts`. This action
-    is purely administrative; it affects which manuscripts are available for
-    future copying events but does not alter the historical record.
-
-    The genealogy graph and manuscript registry are not modified. This
-    deterministically separates the concept of "alive" (available for copying)
-    from "exists" (part of the historical record).
+    arrived. For each of these, it sets the `death_reason` to `NATURAL` if
+    it has not already been set by another event (e.g., persecution). Finally,
+    it removes the manuscripts from the `alive_manuscripts` set.
 
     Args:
         state (GenerationState): The current state of the genealogy generation.
@@ -85,6 +80,12 @@ def handle_deaths(state: GenerationState) -> GenerationState:
     dead_manuscripts = {ms_id for ms_id in state.alive_manuscripts if manuscript_registry.get(ms_id).death_tick == current_tick}
 
     if dead_manuscripts:
+        for ms_id in dead_manuscripts:
+            manuscript = manuscript_registry.get(ms_id)
+            # Only set to NATURAL if a reason hasn't been set by a more
+            # specific event (like persecution) in the same tick.
+            if manuscript.death_reason is None:
+                manuscript.death_reason = DeathReason.NATURAL
         state.alive_manuscripts -= dead_manuscripts
 
     return state
@@ -406,7 +407,6 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
     for event_config in event_configs:
         event_config["event_type"] = "persecution"
 
-    print(f"DEBUG: Event configs for HistoricalEventManager: {event_configs}") # Added temporary debug
     event_manager = HistoricalEventManager(event_configs)
 
     material_transition_manager = MaterialTransitionManager([m.dict() for m in config.material_transitions])

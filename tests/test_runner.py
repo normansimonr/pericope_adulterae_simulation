@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+
 from pasim.execution.orchestrator import run_experiment
 from pasim.execution.parallel import run_parallel
 
@@ -20,7 +21,7 @@ reputation_distribution:
   3: 0.2
   4: 0.2
   5: 0.2
-persecution_events: []
+persecutions: []
 material_transitions:
   - start_tick: 0
     distribution:

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 import numpy as np
 
@@ -32,6 +32,15 @@ class Script(Enum):
 
     UNCIAL = "uncial"
     MINUSCULE = "minuscule"
+
+
+class DeathReason(Enum):
+    """
+    Represents the explicit cause of a manuscript's death.
+    """
+
+    NATURAL = "natural"
+    PERSECUTION = "persecution"
 
 
 @dataclass
@@ -79,6 +88,12 @@ class Manuscript:
     """
     The precise planar (x, y) coordinates representing the manuscript's
     geographical location. This attribute can change over time.
+    """
+
+    death_reason: Optional[DeathReason] = field(default=None)
+    """
+    The explicit reason for the manuscript's death, if applicable.
+    This helps distinguish between natural lifecycle end and external events.
     """
 
 
@@ -176,7 +191,7 @@ class WitnessRegistry:
         if witness.witness_id in self._witnesses:
             raise KeyError(f"Duplicate witness_id: {witness.witness_id}")
         if witness.manuscript_id not in self._manuscript_registry:
-            raise ValueError(f"Witness {witness.witness_id} references non-existent " f"manuscript_id: {witness.manuscript_id}")
+            raise ValueError(f"Witness {witness.witness_id} references non-existent manuscript_id: {witness.manuscript_id}")
         self._witnesses[witness.witness_id] = witness
 
     def get(self, witness_id: str) -> Witness:
