@@ -403,14 +403,14 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
     # 2. Initialize state and managers
     state = initialise_generation_state()
 
-    event_configs = [p.dict() for p in config.persecutions]
+    event_configs = [p.model_dump() for p in config.persecutions]
     for event_config in event_configs:
         event_config["event_type"] = "persecution"
 
     event_manager = HistoricalEventManager(event_configs)
 
-    material_transition_manager = MaterialTransitionManager([m.dict() for m in config.material_transitions])
-    script_transition_manager = ScriptTransitionManager([s.dict() for s in config.script_transitions])
+    material_transition_manager = MaterialTransitionManager([m.model_dump() for m in config.material_transitions])
+    script_transition_manager = ScriptTransitionManager([s.model_dump() for s in config.script_transitions])
 
     # 3. Run simulation loop
     for _ in range(config.total_ticks):

@@ -37,7 +37,7 @@ class CustomJsonEncoder(json.JSONEncoder):
             if hasattr(obj, "model_dump"):  # Pydantic v2
                 return obj.model_dump()
             else:  # Pydantic v1
-                return obj.dict()
+                return obj.model_dump()
         return super().default(obj)
 
 
