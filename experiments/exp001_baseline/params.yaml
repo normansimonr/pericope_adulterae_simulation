@@ -1,4 +1,8 @@
 total_ticks: 10
+n_runs: 1
+max_retries: 3
+seed: null
+text_length: 200
 p_region_migration: 0.01
 p_internal_relocation: 0.05
 reputation_distribution:
@@ -7,7 +11,7 @@ reputation_distribution:
   3: 0.4
   4: 0.2
   5: 0.1
-death_ticks: [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+
 persecutions: []
 material_transitions:
   - start_tick: 0
