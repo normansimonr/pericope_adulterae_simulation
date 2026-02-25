@@ -314,7 +314,17 @@ This file is currently empty. It is intended to house functions for performing s
 
 ### `src/pasim/cli.py`
 
-This file is currently empty. It is intended to serve as the command-line interface entry point for interacting with the simulation framework, as outlined in the `project_overview.md`. It will likely define commands and arguments for running simulations, configuring parameters, and initiating analysis.
+This module provides the comprehensive command-line interface (CLI) for the `pasim` project, built using `argparse`. It serves as the primary entry point for users to interact with the simulation framework without direct Python scripting.
+
+**Key Features and Commands:**
+
+*   **`pasim run <params_path>`**: Executes a simulation experiment using a specified parameters YAML file. It leverages `pasim.execution.orchestrator.run_experiment` for robust execution, parallel processing, and result persistence. Supports a `--verbose` flag for detailed logging.
+*   **`pasim reset [--force]`**: Cleans up experiment-generated data by removing `runs/` directories and `experiment_metadata.json` files from experiment folders. It prompts for user confirmation unless the `--force` flag is used.
+*   **`pasim list`**: Scans the `experiments/` directory and provides a summary of all defined experiments, including their names, requested runs, completed runs, and current status based on metadata.
+*   **`pasim tests`**: Programmatically invokes `pytest` to run the project's test suite. It can forward a `--verbose` flag to `pytest`.
+*   **`pasim help` / `pasim --help`**: Displays detailed usage instructions for the CLI, including available commands, global flags, and information about the experiment directory structure.
+
+The CLI is designed with clean error handling, providing informative messages and exiting with non-zero status codes on failure. It integrates with the project's logging system for configurable output verbosity.
 
 ### `src/pasim/config/__init__.py`
 
