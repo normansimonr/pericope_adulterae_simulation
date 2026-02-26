@@ -7,11 +7,12 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.11"
 numpy = "*"
 networkx = "*"
 pydantic = "*"
 pyyaml = "*"
+scipy = "^1.17.1"
 
 [tool.poetry.scripts]
 pasim = "pasim.cli:main"

@@ -29,21 +29,17 @@ from witness-instance-level properties (reputation), ensuring that geographical
 constraints are applied before textual authority is considered.
 """
 
-import math
 from typing import Any, Dict, List
 
+import numpy as np
 from numpy.random import Generator as RNG
+from scipy.spatial import KDTree
 
 from pasim.core.genealogy import GenealogyGraph
 from pasim.core.state import Manuscript
 
 # Type alias for a witness instance ID
 WitnessInstanceID = Any
-
-
-def _euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:
-    """Calculates the Euclidean distance between two points."""
-    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
 def select_exemplars(
@@ -71,10 +67,19 @@ def select_exemplars(
     if not alive_manuscripts_in_region:
         return []
 
-    # 1. Geographical Filtering: Find 10 closest manuscripts
-    distances = [(_euclidean_distance(new_manuscript.location, ms.location), ms) for ms in alive_manuscripts_in_region]
-    distances.sort(key=lambda x: x[0])
-    closest_manuscripts = [ms for _, ms in distances[:10]]
+    # 1. Geographical Filtering: Find 10 closest manuscripts using KDTree
+    locations = np.array([ms.location for ms in alive_manuscripts_in_region])
+    tree = KDTree(locations)
+
+    # Query for 10 nearest neighbors. k can be less than 10 if there are fewer manuscripts.
+    k = min(10, len(alive_manuscripts_in_region))
+    distances, indices = tree.query(new_manuscript.location, k=k)
+
+    # Handle the case where k=1, which returns a single index instead of an array
+    if k == 1 and np.isscalar(indices):
+        indices = [indices]
+
+    closest_manuscripts = [alive_manuscripts_in_region[i] for i in indices]
 
     # 2. Map manuscripts to witness instances
     candidate_instances = [manuscript_to_instance_map[ms.manuscript_id] for ms in closest_manuscripts]

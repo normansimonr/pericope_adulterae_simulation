@@ -381,8 +381,8 @@ This module, `exemplar_selection.py`, provides the `select_exemplars` function, 
 
 1.  **Geographical Filtering**:
     *   Takes `new_manuscript` (the manuscript needing parents) and a list of `alive_manuscripts_in_region` (all active manuscripts in the same geographical area).
-    *   Calculates the Euclidean distance between the `new_manuscript`'s location and each `alive_manuscript_in_region`'s location.
-    *   Selects the up to 10 closest manuscripts based on this distance, ensuring that local transmission is prioritized.
+    *   Builds a `scipy.spatial.KDTree` from the locations of the `alive_manuscripts_in_region`.
+    *   Queries the KDTree to find the up to 10 closest manuscripts to the `new_manuscript`'s location, ensuring that local transmission is prioritized.
 2.  **Mapping to Witness Instances**:
     *   Converts the selected `closest_manuscripts` (physical `Manuscript` objects) into their corresponding `WitnessInstanceID`s, using the `manuscript_to_instance_map`. These witness instances, which are nodes in the genealogy graph, are the actual entities that will serve as exemplars.
 3.  **Reputation-based Ranking**:
@@ -391,10 +391,6 @@ This module, `exemplar_selection.py`, provides the `select_exemplars` function, 
 4.  **Final Selection**:
     *   Randomly determines the number of exemplars (`n`) to select from a predefined distribution (currently 80% chance for 1 exemplar, 10% for 2, 10% for 3).
     *   Selects the top `n` `WitnessInstanceID`s from the reputation-sorted list as the final exemplars.
-
-**Helper Function:**
-
-*   **`_euclidean_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float`:** A private utility function to calculate the standard Euclidean distance between two 2D points.
 
 **Separation of Concerns:**
 
