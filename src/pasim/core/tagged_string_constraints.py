@@ -26,6 +26,7 @@ from pasim.config.schema import SimulationConfig
 # that a segment in a tagged string can hold. This is the "alphabet" of
 # our textual model. It is defined as a NumPy array for efficient lookups.
 LEGAL_SEGMENT_VALUES: NDArray[np.int16] = np.array([1, 2, 3, 4, 5], dtype=np.int16)
+LEGAL_SEGMENT_VALUES_SET: frozenset[int] = frozenset(LEGAL_SEGMENT_VALUES.tolist())
 
 # For type hinting clarity.
 SegmentValue: TypeAlias = np.int16
@@ -44,7 +45,7 @@ def is_valid_segment_value(value: SegmentValue) -> bool:
     Returns:
         `True` if the value is a legal segment value, `False` otherwise.
     """
-    return value in LEGAL_SEGMENT_VALUES
+    return value in LEGAL_SEGMENT_VALUES_SET
 
 
 def validate_tagged_string(tagged_string: NDArray[np.int16], config: SimulationConfig) -> None:
@@ -74,10 +75,10 @@ def validate_tagged_string(tagged_string: NDArray[np.int16], config: SimulationC
         raise TypeError("Tagged string must be a NumPy array.")
 
     if len(tagged_string) != config.text_length:
-        raise ValueError(f"Tagged string must have length {config.text_length}, " f"but got {len(tagged_string)}.")
+        raise ValueError(f"Tagged string must have length {config.text_length}, but got {len(tagged_string)}.")
 
     if not np.issubdtype(tagged_string.dtype, np.integer):
-        raise ValueError("Tagged string dtype must be an integer type, " f"but got {tagged_string.dtype}.")
+        raise ValueError(f"Tagged string dtype must be an integer type, but got {tagged_string.dtype}.")
 
     if not np.all(np.isin(tagged_string, LEGAL_SEGMENT_VALUES)):
         raise ValueError("Tagged string contains illegal segment values.")

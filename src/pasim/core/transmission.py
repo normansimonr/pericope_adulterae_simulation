@@ -74,30 +74,50 @@ def majority_from_exemplars(parent_texts: List[TaggedString], rng: np.random.Gen
         raise ValueError("Majority voting requires at least two parent exemplars.")
 
     first_text = parent_texts[0]
-    shape = first_text.shape
+    # num_segments = first_text.shape[0]  # Assuming 1D tagged strings
     dtype = first_text.dtype
 
-    if not all(p.shape == shape and p.dtype == dtype for p in parent_texts):
+    if not all(p.shape == first_text.shape and p.dtype == dtype for p in parent_texts):
         raise ValueError("All parent exemplars must have the same shape and dtype.")
 
     # Stack arrays for efficient, column-wise processing
-    stacked_texts = np.vstack(parent_texts)
-    num_segments = stacked_texts.shape[1]
-    result_text = np.empty(num_segments, dtype=dtype)
+    # stacked_texts will have shape (num_parents, num_segments)
+    stacked_texts = np.array(parent_texts)  # Automatically stacks if List[NDArray]
 
-    for i in range(num_segments):
-        segment_values = stacked_texts[:, i]
-        values, counts = np.unique(segment_values, return_counts=True)
+    # Assume legal segment values are 1, 2, 3, 4, 5 as per tagged_string_constraints
+    possible_values = np.array([1, 2, 3, 4, 5], dtype=dtype)
+    # num_possible_values = len(possible_values) # Not directly used in new vectorized code
 
-        max_count = np.max(counts)
-        # Find all values that share the maximum count
-        tied_values = values[counts == max_count]
+    # Create a mask for each possible value across all parents and segments
+    # expanded_values shape: (num_possible_values, 1, 1)
+    # stacked_texts shape: (1, num_parents, num_segments)
+    # comparison result shape: (num_possible_values, num_parents, num_segments)
+    matches_per_value_parent_segment = possible_values[:, np.newaxis, np.newaxis] == stacked_texts[np.newaxis, :, :]
 
-        if len(tied_values) == 1:
-            # Strict majority, no tie
-            result_text[i] = tied_values[0]
-        else:
-            # Tie for majority, break it randomly
-            result_text[i] = rng.choice(tied_values)
+    # Count occurrences of each value (1-5) for each segment
+    # Sum along num_parents axis (axis=1): (num_possible_values, num_segments)
+    counts_per_value_segment = np.sum(matches_per_value_parent_segment, axis=1)
+
+    # Find the maximum count for each segment
+    # max_counts_per_segment shape: (num_segments,)
+    max_counts_per_segment = np.max(counts_per_value_segment, axis=0)
+
+    # Identify which values (1-5) achieve this maximum count for each segment
+    # tied_mask shape: (num_possible_values, num_segments)
+    tied_mask = counts_per_value_segment == max_counts_per_segment[np.newaxis, :]
+
+    # Handle ties by random choice:
+    # Generate random numbers for each potential choice where there's a tie
+    random_choices = rng.random(tied_mask.shape)
+    # For values that are not tied for the max count, set their random choice score to a very low number
+    # This ensures they won't be picked by argmax
+    random_choices[~tied_mask] = -1
+
+    # Find the index of the best random choice for each segment.
+    # np.argmax will pick the first if random scores are equal for tied elements.
+    chosen_value_indices = np.argmax(random_choices, axis=0)
+
+    # Map these indices back to the actual possible values
+    result_text = possible_values[chosen_value_indices]
 
     return result_text

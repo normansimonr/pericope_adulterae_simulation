@@ -22,7 +22,7 @@ from numpy.typing import NDArray
 
 from pasim.config.schema import SimulationConfig
 
-from .tagged_string_constraints import sample_alternative_value, validate_tagged_string
+from .tagged_string_constraints import LEGAL_SEGMENT_VALUES, validate_tagged_string
 
 
 def mutate_tagged_string(
@@ -66,10 +66,10 @@ def mutate_tagged_string(
           length.
     """
     if not (0.0 <= expected_proportion <= 1.0):
-        raise ValueError("Expected proportion must be between 0.0 and 1.0 (inclusive), " f"but got {expected_proportion}.")
+        raise ValueError(f"Expected proportion must be between 0.0 and 1.0 (inclusive), but got {expected_proportion}.")
 
     if len(tagged_string) != config.text_length:
-        raise ValueError(f"Tagged string must have length {config.text_length}, " f"but got {len(tagged_string)}.")
+        raise ValueError(f"Tagged string must have length {config.text_length}, but got {len(tagged_string)}.")
 
     if expected_proportion == 0.0:
         return tagged_string.copy()
@@ -86,11 +86,31 @@ def mutate_tagged_string(
     # Create a new array to store the mutated string
     new_string = tagged_string.copy()
 
-    # Apply mutations
-    for index in indices_to_mutate:
-        current_value = new_string[index]
-        new_value = sample_alternative_value(current_value, rng)
-        new_string[index] = new_value
+    # Get the values at the selected indices to mutate
+    current_values_at_indices = new_string[indices_to_mutate]
+
+    # Generate random choices from all possible legal values for the positions to mutate
+    # The size of this random array is `n_mutations`
+    new_values = rng.choice(
+        LEGAL_SEGMENT_VALUES,  # Using the global LEGAL_SEGMENT_VALUES from tagged_string_constraints
+        size=n_mutations,
+        replace=True,  # Allow duplicates, as different positions can mutate to same value
+    )
+
+    # Identify where the random choice is the same as the current value
+    mask_resample = new_values == current_values_at_indices
+
+    # For elements where new_value == current_value, we need to pick a different value.
+    # We can apply a simple transformation that guarantees a different value
+    # (e.g., increment modulo max_val, adjusted for 1-based indexing).
+    # This introduces a slight bias but is fully vectorized.
+    if np.any(mask_resample):
+        # max_val = LEGAL_SEGMENT_VALUES.max() (which is 5)
+        # The new value should be (current_value % max_val) + 1
+        new_values[mask_resample] = (current_values_at_indices[mask_resample] % LEGAL_SEGMENT_VALUES.max()) + 1
+
+    # Apply the new values to the `new_string` at the `indices_to_mutate`
+    new_string[indices_to_mutate] = new_values
 
     # Final safety check to ensure the output is valid
     validate_tagged_string(new_string, config)
