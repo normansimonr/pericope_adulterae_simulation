@@ -41,6 +41,7 @@ Explicit Exclusions:
 - Batch execution or file I/O.
 """
 
+import logging
 from math import ceil
 from typing import Any, Dict, List, Optional
 
@@ -59,6 +60,10 @@ from pasim.core.simulation_state import GenerationState, initialise_generation_s
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.state import DeathReason, Manuscript, Region, Witness
 from pasim.core.text_initialisation import make_initial_text
+from pasim.utils.logging import log_tick_performance
+
+logger = logging.getLogger(__name__)
+
 
 # --- Regional Demand Allocation ---
 REGIONAL_DISTRIBUTIONS = {
@@ -377,6 +382,7 @@ def _spawn_new_manuscripts_from_demand(
     return state
 
 
+@log_tick_performance(logger)
 def advance_tick(
     state: GenerationState,
     demand_today: Dict[Region, int],
