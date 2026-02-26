@@ -11,7 +11,7 @@ from typing import Any, Callable
 from pasim.core.simulation_state import GenerationState
 
 
-def log_tick_performance(logger: logging.Logger) -> Callable[..., Any]:
+def log_tick_performance(logger: logging.Logger, log_every_n_ticks: int = 1) -> Callable[..., Any]:
     """
     A decorator that logs the performance and state of a simulation tick.
 
@@ -21,6 +21,8 @@ def log_tick_performance(logger: logging.Logger) -> Callable[..., Any]:
 
     Args:
         logger: The logger instance to use for logging.
+        log_every_n_ticks: Log only when the current tick is a multiple of this value.
+                           Defaults to 1, logging every tick.
 
     Returns:
         A wrapper function.
@@ -37,7 +39,8 @@ def log_tick_performance(logger: logging.Logger) -> Callable[..., Any]:
             tick = state_before.tick + 1
             log_level = logging.INFO
 
-            logger.log(log_level, f"Tick {tick:04d}: Starting... (Alive Manuscripts: {len(state_before.alive_manuscripts)})")
+            if tick % log_every_n_ticks == 0:
+                logger.log(log_level, f"Tick {tick:04d}: Starting... (Alive Manuscripts: {len(state_before.alive_manuscripts)})")
 
             start_time = time.perf_counter()
             state_after = func(*args, **kwargs)
@@ -45,12 +48,13 @@ def log_tick_performance(logger: logging.Logger) -> Callable[..., Any]:
 
             duration_ms = (end_time - start_time) * 1000
 
-            logger.log(
-                log_level,
-                f"Tick {tick:04d}: Completed in {duration_ms:.2f}ms. "
-                f"(Alive Manuscripts: {len(state_after.alive_manuscripts)}, "
-                f"Total Manuscripts: {len(state_after.registries.manuscripts)})",
-            )
+            if tick % log_every_n_ticks == 0:
+                logger.log(
+                    log_level,
+                    f"Tick {tick:04d}: Completed in {duration_ms:.2f}ms. "
+                    f"(Alive Manuscripts: {len(state_after.alive_manuscripts)}, "
+                    f"Total Manuscripts: {len(state_after.registries.manuscripts)})",
+                )
 
             return state_after
 

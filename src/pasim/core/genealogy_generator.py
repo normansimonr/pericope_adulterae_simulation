@@ -42,6 +42,7 @@ Explicit Exclusions:
 """
 
 import logging
+import time
 from math import ceil
 from typing import Any, Dict, List, Optional
 
@@ -60,7 +61,6 @@ from pasim.core.simulation_state import GenerationState, initialise_generation_s
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.state import DeathReason, Manuscript, Region, Witness
 from pasim.core.text_initialisation import make_initial_text
-from pasim.utils.logging import log_tick_performance
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +382,6 @@ def _spawn_new_manuscripts_from_demand(
     return state
 
 
-@log_tick_performance(logger)
 def advance_tick(
     state: GenerationState,
     demand_today: Dict[Region, int],
@@ -391,6 +390,7 @@ def advance_tick(
     event_manager: HistoricalEventManager,
     material_transition_manager: MaterialTransitionManager,
     script_transition_manager: ScriptTransitionManager,
+    log_tick_frequency: int,
 ) -> GenerationState:
     """Advances the simulation clock and orchestrates per-tick events.
 
@@ -408,6 +408,14 @@ def advance_tick(
         The updated state after processing the tick.
     """
     state.tick += 1
+
+    log_level = logging.INFO
+    current_tick_for_logging = state.tick
+
+    if current_tick_for_logging % log_tick_frequency == 0:
+        logger.log(log_level, f"Tick {current_tick_for_logging:04d}: Starting... (Alive Manuscripts: {len(state.alive_manuscripts)})")
+
+    start_time = time.perf_counter()
 
     # 1. Process deaths (mechanistic)
     state = handle_deaths(state)
@@ -439,6 +447,17 @@ def advance_tick(
         "alive_manuscripts": len(state.alive_manuscripts),
         "total_manuscripts": len(state.registries.manuscripts),
     })
+
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+
+    if current_tick_for_logging % log_tick_frequency == 0:
+        logger.log(
+            log_level,
+            f"Tick {current_tick_for_logging:04d}: Completed in {duration_ms:.2f}ms. "
+            f"(Alive Manuscripts: {len(state.alive_manuscripts)}, "
+            f"Total Manuscripts: {len(state.registries.manuscripts)})",
+        )
 
     return state
 
@@ -498,6 +517,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
             event_manager=event_manager,
             material_transition_manager=material_transition_manager,
             script_transition_manager=script_transition_manager,
+            log_tick_frequency=config.log_tick_frequency,
         )
 
     return state

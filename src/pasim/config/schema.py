@@ -136,6 +136,7 @@ class SimulationConfig(BaseModel):
     material_transitions: List[MaterialTransitionConfig] = []
     script_transitions: List[ScriptTransitionConfig] = []
     demand_schedule: DemandScheduleConfig
+    log_tick_frequency: int = Field(1, ge=1)  # New field for logging frequency
 
     @field_validator("material_transitions", "script_transitions")
     @classmethod
