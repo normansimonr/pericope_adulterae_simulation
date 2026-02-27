@@ -358,6 +358,7 @@ This module defines the comprehensive, hierarchical configuration schema for `pa
     *   `reputation_distribution`: A dictionary mapping reputation scores (1-5) to their probabilities.
     *   Includes lists of `PersecutionEventConfig`, `MaterialTransitionConfig`, and `ScriptTransitionConfig` objects.
     *   `demand_schedule`: An instance of `DemandScheduleConfig`.
+    *   `validation_frequency`: An integer (`0` means no periodic validation; `N > 0` means full graph validation every `N` ticks).
     *   Includes validators to ensure `start_tick` values in transition schedules are strictly increasing.
 
 **Utility Functions:**

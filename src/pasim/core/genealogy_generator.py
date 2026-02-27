@@ -52,7 +52,7 @@ from scipy.spatial import KDTree
 
 from pasim.config.schema import SimulationConfig
 from pasim.core.exemplar_selection import select_exemplars
-from pasim.core.genealogy import add_child_node, add_root_node
+from pasim.core.genealogy import add_child_node, add_root_node, validate_genealogy_full
 from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.lifespan import sample_lifespan
 from pasim.core.material_transition_manager import MaterialTransitionManager
@@ -470,6 +470,13 @@ def advance_tick(
             f"(Alive Manuscripts: {len(state.alive_manuscripts)}, "
             f"Total Manuscripts: {len(state.registries.manuscripts)})",
         )
+
+    # Perform full genealogy validation periodically, if enabled
+    validation_frequency = params.validation_frequency
+    if validation_frequency > 0 and state.tick % validation_frequency == 0:
+        logger.debug(f"Tick {state.tick}: Performing periodic full genealogy validation...")
+        validate_genealogy_full(state.graph)
+        logger.debug(f"Tick {state.tick}: Periodic full genealogy validation passed.")
 
     return state
 

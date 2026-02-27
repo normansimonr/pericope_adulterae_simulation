@@ -110,3 +110,13 @@ script_transitions:
 demand_schedule:
   0: 10 # Example: At tick 0, aggregate demand for new manuscripts is 10.
   # 10: 20 # Example: At tick 10, aggregate demand for new manuscripts is 20.
+
+# log_tick_frequency (int, optional): The frequency (in ticks) at which progress updates
+# are logged to the console. Defaults to 1.
+log_tick_frequency: 1
+
+# validation_frequency (int, optional): The frequency (in ticks) at which a full genealogy
+# graph validation (DAG and single root check) is performed.
+# 0 means validation is disabled (except at initial root node creation).
+# N > 0 means validation every N ticks. Defaults to 0.
+validation_frequency: 0
