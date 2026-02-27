@@ -414,12 +414,13 @@ This module provides the fundamental building blocks for constructing and managi
     *   Takes `graph`, `node_id` (unique identifier), `witness_id` (foreign key to `Witness` registry), `manuscript_id` (foreign key to `Manuscript` registry), `birth_tick`, `reputation`, and an optional `death_tick` as attributes for the node.
     *   Raises `ValueError` if `node_id` already exists.
     *   Raises `GenealogyValidationError` if a root node is attempted on a non-empty graph.
-*   **`add_child_node(...)`:** Adds a new witness instance node as a child of one or more existing parent nodes, representing a copying event. This function now explicitly checks for and prevents the creation of cycles or other invariant violations by calling `validate_genealogy` after the node and edges are added, reverting the changes if validation fails.
+*   **`add_child_node(...)`:** Adds a new witness instance node as a child of one or more existing parent nodes, representing a copying event. This function now performs a lightweight validation of the *newly added node's attributes* directly. Full graph-level invariants (DAG, single root) are assumed to be maintained by the graph construction logic and are only fully validated when `add_root_node` is called.
     *   Takes similar parameters to `add_root_node`, plus `parent_node_ids` (a list of node IDs for the parent(s)).
     *   Adds edges from each parent to the new child.
     *   Raises `ValueError` if a node with `node_id` already exists, if any parent ID does not exist, or if no parents are provided.
     *   Raises `GenealogyValidationError` if adding the node violates any genealogy invariants (e.g., introduces a cycle, or implicitly creates a second root by attempting to add a node without parents when the graph is not empty).
-*   **`validate_genealogy(graph: GenealogyGraph) -> None`:** This is the **single authoritative validator** for genealogy correctness. It performs structural sanity checks and enforces critical invariants:
+*   **`_validate_genealogy_attributes(graph: GenealogyGraph) -> None`:** This internal function performs structural sanity checks on *node attributes only*, ensuring all nodes contain essential attributes (`witness_id`, `manuscript_id`, `birth_tick`, `reputation`).
+*   **`validate_genealogy_full(graph: GenealogyGraph) -> None`:** This is the **authoritative full validator** for genealogy correctness, invoked after `add_root_node`. It performs comprehensive structural sanity checks and enforces critical invariants:
     *   The graph must be a `networkx.DiGraph` and a **Directed Acyclic Graph (DAG)**.
     *   There must be **at most one root (autograph)**. This implicitly ensures **no orphan instances** (every non-autograph node has at least one parent) by disallowing multiple disconnected components, each with its own root.
     *   All nodes must contain essential attributes (`witness_id`, `manuscript_id`, `birth_tick`, `reputation`).

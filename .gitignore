@@ -28,6 +28,7 @@ data/
 *.log
 *.tmp
 *.swp
+profile_stats.prof # Added to ignore profiling output
 
 # Poetry
 .pdm.toml
@@ -38,3 +39,6 @@ pdm.lock
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# Experiment Runs
+experiments/*/runs/

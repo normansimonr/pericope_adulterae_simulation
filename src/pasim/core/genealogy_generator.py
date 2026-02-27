@@ -46,7 +46,9 @@ import time
 from math import ceil
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 from numpy.random import Generator as RNG
+from scipy.spatial import KDTree
 
 from pasim.config.schema import SimulationConfig
 from pasim.core.exemplar_selection import select_exemplars
@@ -252,10 +254,19 @@ def _spawn_new_manuscripts_from_demand(
         stock[manuscript.region] += 1
         alive_by_region[manuscript.region].append(manuscript)
 
+    # Pre-build KDTrees for each region with alive manuscripts, once per tick
+    kdtree_by_region: Dict[Region, KDTree] = {}
+    for region, alive_manuscripts_list in alive_by_region.items():
+        if alive_manuscripts_list:
+            locations = np.array([ms.location for ms in alive_manuscripts_list])
+            kdtree_by_region[region] = KDTree(locations)
+
     # Evaluate demand and spawn
     for region, demanded_count in demand_today.items():
         stock_count = stock.get(region, 0)
         if demanded_count > stock_count:
+            # Get the pre-built KDTree for the current region, if available
+            region_kdtree = kdtree_by_region.get(region)
             # Spawn new manuscripts
             for _ in range(demanded_count - stock_count):
                 # 1. Create Manuscript
@@ -286,6 +297,7 @@ def _spawn_new_manuscripts_from_demand(
                     graph=state.graph,
                     manuscript_to_instance_map=state.manuscript_to_instance_map,
                     rng=rng,
+                    kdtree=region_kdtree,  # Pass the pre-built KDTree
                 )
 
                 # 3. Create Witness and WitnessInstance (Graph Node)

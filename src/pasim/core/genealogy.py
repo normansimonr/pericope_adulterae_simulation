@@ -95,7 +95,7 @@ def add_root_node(
         birth_tick=birth_tick,
         reputation=reputation,
     )
-    validate_genealogy(graph)
+    validate_genealogy_full(graph)
 
 
 def add_child_node(
@@ -157,18 +157,43 @@ def add_child_node(
     )
     edges = [(parent_id, node_id) for parent_id in parent_node_ids]
     graph.add_edges_from(edges)
+    # Validate attributes of the newly added node
+    required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
+    node_attrs = graph.nodes[node_id]
+    missing_attrs = required_attrs - set(node_attrs.keys())
+    if missing_attrs:
+        graph.remove_node(node_id)  # Revert changes
+        raise GenealogyValidationError(f"Node '{node_id}' is missing required attributes: {missing_attrs}")
 
-    try:
-        validate_genealogy(graph)
-    except GenealogyValidationError as e:
-        # If validation fails, revert the changes to maintain a valid state.
-        graph.remove_node(node_id)
-        raise GenealogyValidationError(f"Failed to add child '{node_id}': {e}") from e
 
-
-def validate_genealogy(graph: GenealogyGraph) -> None:
+def _validate_genealogy_attributes(graph: GenealogyGraph) -> None:
     """
-    Performs structural sanity checks on the genealogy graph.
+    Performs structural sanity checks on node attributes.
+
+    Invariants Checked:
+        1. The graph must be a `networkx.DiGraph`.
+        2. All nodes must have a standard set of attributes.
+
+    Args:
+        graph: The genealogy graph to validate.
+
+    Failure Conditions:
+        - Raises `TypeError` if the graph is not a `networkx.DiGraph`.
+        - Raises `GenealogyValidationError` if any invariant is violated.
+    """
+    if not isinstance(graph, nx.DiGraph):
+        raise TypeError("Graph must be a networkx.DiGraph instance.")
+
+    required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
+    for node_id, attrs in graph.nodes(data=True):
+        missing_attrs = required_attrs - set(attrs.keys())
+        if missing_attrs:
+            raise GenealogyValidationError(f"Node '{node_id}' is missing required attributes: {missing_attrs}")
+
+
+def validate_genealogy_full(graph: GenealogyGraph) -> None:
+    """
+    Performs full structural sanity checks on the genealogy graph.
 
     This function is the single authoritative validator for genealogy correctness.
     It enforces that the graph is a valid Directed Acyclic Graph (DAG) with at
@@ -189,8 +214,7 @@ def validate_genealogy(graph: GenealogyGraph) -> None:
         - Raises `TypeError` if the graph is not a `networkx.DiGraph`.
         - Raises `GenealogyValidationError` if any invariant is violated.
     """
-    if not isinstance(graph, nx.DiGraph):
-        raise TypeError("Graph must be a networkx.DiGraph instance.")
+    _validate_genealogy_attributes(graph)
 
     # Invariant 2: The graph must be acyclic.
     if not nx.is_directed_acyclic_graph(graph):
@@ -200,14 +224,7 @@ def validate_genealogy(graph: GenealogyGraph) -> None:
     # as any orphan would be a root of its own disconnected component.
     roots = get_roots(graph)
     if len(roots) > 1:
-        raise GenealogyValidationError(f"Genealogy cannot have more than one root (autograph). " f"Found {len(roots)} roots: {roots}")
-
-    # Invariant 4: All nodes must have required attributes.
-    required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
-    for node_id, attrs in graph.nodes(data=True):
-        missing_attrs = required_attrs - set(attrs.keys())
-        if missing_attrs:
-            raise GenealogyValidationError(f"Node '{node_id}' is missing required attributes: {missing_attrs}")
+        raise GenealogyValidationError(f"Genealogy cannot have more than one root (autograph). Found {len(roots)} roots: {roots}")
 
 
 def get_parents(graph: GenealogyGraph, node_id: NodeID) -> List[NodeID]:

@@ -29,7 +29,7 @@ from witness-instance-level properties (reputation), ensuring that geographical
 constraints are applied before textual authority is considered.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from numpy.random import Generator as RNG
@@ -48,6 +48,7 @@ def select_exemplars(
     graph: GenealogyGraph,
     manuscript_to_instance_map: Dict[str, WitnessInstanceID],
     rng: RNG,
+    kdtree: Optional[KDTree] = None,  # New optional argument
 ) -> List[WitnessInstanceID]:
     """
     Selects parent exemplars for a new manuscript.
@@ -60,6 +61,7 @@ def select_exemplars(
         manuscript_to_instance_map: A mapping from manuscript IDs to their
                                     corresponding witness instance IDs in the graph.
         rng: The seeded random number generator.
+        kdtree: An optional pre-built KDTree for the `alive_manuscripts_in_region`.
 
     Returns:
         A list of witness instance IDs chosen as exemplars.
@@ -68,8 +70,12 @@ def select_exemplars(
         return []
 
     # 1. Geographical Filtering: Find 10 closest manuscripts using KDTree
-    locations = np.array([ms.location for ms in alive_manuscripts_in_region])
-    tree = KDTree(locations)
+    # Use provided KDTree or build a new one if not provided
+    if kdtree is None:
+        locations = np.array([ms.location for ms in alive_manuscripts_in_region])
+        tree = KDTree(locations)
+    else:
+        tree = kdtree
 
     # Query for 10 nearest neighbors. k can be less than 10 if there are fewer manuscripts.
     k = min(10, len(alive_manuscripts_in_region))
