@@ -11,18 +11,32 @@ reputation_distribution:
   3: 0.4
   4: 0.2
   5: 0.1
-persecutions: []
+persecutions:
+  - start_tick: 50
+    regions:
+      - "Asia Minor"
+      - "Egypt"
+    kill_proportion: 0.5
 material_transitions:
-- start_tick: 0
-  distribution:
-    papyrus: 1.0
-    parchment: 0.0
-    paper: 0.0
+  - start_tick: 0
+    distribution:
+      papyrus: 1.0
+      parchment: 0.0
+      paper: 0.0
+  - start_tick: 50
+    distribution:
+      parchment: 0.6
+      papyrus: 0.1
+      paper: 0.3
 script_transitions:
-- start_tick: 0
-  distribution:
-    uncial: 1.0
-    minuscule: 0.0
+  - start_tick: 0
+    distribution:
+      uncial: 1.0
+      minuscule: 0.0
+  - start_tick: 70
+    distribution:
+      uncial: 0.3
+      minuscule: 0.7
 demand_schedule:
   40: 2
   41: 3
