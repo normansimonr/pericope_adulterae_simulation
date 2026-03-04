@@ -45,7 +45,7 @@ p_region_migration: 0.0
 # will relocate within its current region during a tick. Defaults to 0.0 (no internal relocation).
 p_internal_relocation: 0.0
 
-# reputation_distribution (Dict[int, float], required): Defines the probability distribution
+# pa_innovator_reputation (float, required): Defines the probability distribution
 # for sampling new reputation scores (1-5) for newly created witness instances.
 # Keys must be integers 1-5, values must be floats >= 0, and they must sum to 1.0.
 reputation_distribution:
@@ -54,6 +54,25 @@ reputation_distribution:
   3: 0.2
   4: 0.2
   5: 0.2
+
+# --- PA Regime Configuration ---
+# These parameters define the specific PA (Pericope Adulterae) transmission regime.
+
+# pa_regime (str, required): The type of PA transmission regime.
+# Must be either "insertion" or "omission".
+pa_regime: "insertion"
+
+# pa_intervention_year (int, required): The simulation tick at which the PA intervention occurs.
+# Must be between 0 and total_ticks.
+pa_intervention_year: 50
+
+# pa_intervention_region (str, required): The geographical region where the PA intervention originates.
+# Must be a valid region (e.g., "Asia Minor", "Levant", "Egypt").
+pa_intervention_region: "Asia Minor"
+
+# pa_innovator_reputation (float, required): The fixed reputation score (1.0 to 5.0)
+# assigned to the initial witness instance that introduces the PA change.
+pa_innovator_reputation: 5.0
 
 
 

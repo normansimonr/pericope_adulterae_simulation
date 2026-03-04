@@ -117,6 +117,10 @@ def test_persecution_correctness(state_collector_fixture: List[GenerationState])
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         demand_schedule={0: 0},  # New aggregate format
+        pa_regime="insertion",
+        pa_intervention_year=0,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
 
     # 1. Initialize state with manuscripts in two regions
@@ -181,6 +185,10 @@ def test_persecution_determinism(state_collector_fixture: List[GenerationState])
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         demand_schedule={0: 0},  # New aggregate format
+        pa_regime="insertion",
+        pa_intervention_year=0,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
 
     # --- Run 1 with seed 123 ---
@@ -248,6 +256,10 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
             4: 0.2,
             5: 0.2,
         },  # Dummy 5-point distribution
+        "pa_regime": "insertion",
+        "pa_intervention_year": 5,
+        "pa_intervention_region": "Asia Minor",
+        "pa_innovator_reputation": 5.0,
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
@@ -343,6 +355,10 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
             4: 0.2,
             5: 0.2,
         },  # Dummy 5-point distribution
+        "pa_regime": "insertion",
+        "pa_intervention_year": 5,
+        "pa_intervention_region": "Asia Minor",
+        "pa_innovator_reputation": 5.0,
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
@@ -426,6 +442,10 @@ def test_migration_determinism(state_collector_fixture: List[GenerationState]):
             p_internal_relocation=0.0,
             reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
             demand_schedule={0: 0},  # New aggregate format
+            pa_regime="insertion",
+            pa_intervention_year=0,
+            pa_intervention_region="Asia Minor",
+            pa_innovator_reputation=5.0,
         )
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
@@ -476,6 +496,10 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         demand_schedule=DemandScheduleConfig(root={0: 0}),  # New aggregate format
+        pa_regime="insertion",
+        pa_intervention_year=0,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
 
     def run_with_order(order: list, seed: int, state_collector: List[GenerationState]) -> set:
@@ -505,6 +529,10 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         demand_schedule=DemandScheduleConfig(root={0: 0}),  # New aggregate format
+        pa_regime="insertion",
+        pa_intervention_year=0,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]

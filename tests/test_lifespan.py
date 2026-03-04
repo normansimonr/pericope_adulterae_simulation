@@ -20,7 +20,11 @@ def get_dummy_config(total_ticks=10, text_length=10, reputation_distribution=Non
         "persecutions": [],
         "material_transitions": [{"start_tick": 0, "distribution": {"papyrus": 1.0}}],
         "script_transitions": [{"start_tick": 0, "distribution": {"uncial": 1.0}}],
-        "demand_schedule": {0: {"Asia Minor": 1, "Egypt": 1}},
+        "demand_schedule": {0: 10},
+        "pa_regime": "insertion",
+        "pa_intervention_year": 0,
+        "pa_intervention_region": "Asia Minor",
+        "pa_innovator_reputation": 5.0,
         **kwargs,
     }
     return config_dict

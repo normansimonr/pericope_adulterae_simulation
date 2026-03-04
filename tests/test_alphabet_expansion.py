@@ -15,7 +15,14 @@ from pasim.core.text_initialisation import make_initial_text
 @pytest.fixture
 def config():
     return SimulationConfig(
-        total_ticks=10, text_length=10, demand_schedule={0: 1}, reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2}
+        total_ticks=10,
+        text_length=10,
+        demand_schedule={0: 1},
+        reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
+        pa_regime="insertion",
+        pa_intervention_year=5,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
 
 
@@ -36,7 +43,14 @@ def test_mutation_can_produce_zero(config):
     rng = np.random.default_rng(42)
     # Use a larger text to avoid random failure (1/6 chance per segment)
     large_config = SimulationConfig(
-        total_ticks=1, text_length=100, demand_schedule={0: 1}, reputation_distribution={1: 1.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0}
+        total_ticks=1,
+        text_length=100,
+        demand_schedule={0: 1},
+        reputation_distribution={1: 1.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0},
+        pa_regime="insertion",
+        pa_intervention_year=0,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
     # Start with all 1s
     text = np.ones(large_config.text_length, dtype=np.int16)
@@ -52,7 +66,14 @@ def test_mutation_can_remove_zero(config):
     rng = np.random.default_rng(42)
     # Use a larger text
     large_config = SimulationConfig(
-        total_ticks=1, text_length=100, demand_schedule={0: 1}, reputation_distribution={1: 1.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0}
+        total_ticks=1,
+        text_length=100,
+        demand_schedule={0: 1},
+        reputation_distribution={1: 1.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0},
+        pa_regime="insertion",
+        pa_intervention_year=0,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
     )
     # Start with all 0s
     text = np.zeros(large_config.text_length, dtype=np.int16)

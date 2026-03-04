@@ -28,7 +28,7 @@ are configured separately:
     input to the simulation's core spawning logic.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -138,6 +138,19 @@ class SimulationConfig(BaseModel):
     demand_schedule: DemandScheduleConfig
     log_tick_frequency: int = Field(1, ge=1)
     validation_frequency: int = Field(0, ge=0)  # 0 means disabled, N means every N ticks
+
+    # PA Regime Configuration
+    pa_regime: Literal["insertion", "omission"]
+    pa_intervention_year: int = Field(..., ge=0)
+    pa_intervention_region: Region
+    pa_innovator_reputation: float = Field(..., ge=1.0, le=5.0)
+
+    @model_validator(mode="after")
+    def validate_pa_intervention_year(self):
+        """Ensures pa_intervention_year is within simulation total_ticks."""
+        if self.pa_intervention_year > self.total_ticks:
+            raise ValueError(f"pa_intervention_year ({self.pa_intervention_year}) cannot exceed total_ticks ({self.total_ticks})")
+        return self
 
     @field_validator("material_transitions", "script_transitions")
     @classmethod

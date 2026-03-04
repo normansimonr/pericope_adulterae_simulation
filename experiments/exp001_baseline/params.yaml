@@ -11,6 +11,10 @@ reputation_distribution:
   3: 0.4
   4: 0.2
   5: 0.1
+pa_regime: "insertion"
+pa_intervention_year: 300
+pa_intervention_region: "Asia Minor"
+pa_innovator_reputation: 5.0
 persecutions:
   - start_tick: 50
     regions:
