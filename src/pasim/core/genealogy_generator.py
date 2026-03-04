@@ -535,9 +535,18 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
     for _ in range(config.total_ticks):
         current_tick = state.tick + 1  # Demand is calculated for the *next* tick
         # Get aggregate demand for the current tick, using last known value if not explicitly defined
-        aggregate_demand_for_tick = config.demand_schedule.root.get(
-            current_tick, config.demand_schedule.root.get(max(config.demand_schedule.root.keys()), 0)
-        )
+        if current_tick in config.demand_schedule.root:
+            aggregate_demand_for_tick = config.demand_schedule.root[current_tick]
+        else:
+            # Find the largest tick in the schedule that is <= current_tick
+            past_ticks = [t for t in config.demand_schedule.root.keys() if t <= current_tick]
+            if past_ticks:
+                aggregate_demand_for_tick = config.demand_schedule.root[max(past_ticks)]
+            else:
+                # If no past ticks, default to the value of the earliest defined tick
+                # or 0 if the schedule is empty (which shouldn't happen due to validation)
+                earliest_tick = min(config.demand_schedule.root.keys())
+                aggregate_demand_for_tick = config.demand_schedule.root[earliest_tick]
 
         # Allocate aggregate demand to regions
         demand_today = _allocate_demand(current_tick, aggregate_demand_for_tick)

@@ -12,7 +12,7 @@ def config():
     return SimulationConfig(
         total_ticks=50,
         text_length=20,
-        demand_schedule={0: 5, 10: 10, 20: 15},
+        demand_schedule={1: 5, 10: 10, 25: 15},
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         material_transitions=[{"start_tick": 0, "distribution": {"parchment": 1.0}}],
         script_transitions=[{"start_tick": 0, "distribution": {"uncial": 1.0}}],

@@ -20,7 +20,7 @@ def test_full_simulation_reproducibility(tmp_path):
         "p_internal_relocation": 0.1,
         "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         "pa_regime": "insertion",
-        "pa_intervention_year": 5,
+        "pa_intervention_year": 1,
         "pa_intervention_region": "Asia Minor",
         "pa_innovator_reputation": 5.0,
         "persecutions": [{"start_tick": 5, "end_tick": 5, "regions": ["Egypt"], "kill_proportion": 0.5}],
@@ -109,14 +109,13 @@ def test_different_seeds_produce_different_results(tmp_path):
         "p_internal_relocation": 0.5,
         "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         "pa_regime": "insertion",
-        "pa_intervention_year": 2,
+        "pa_intervention_year": 1,
         "pa_intervention_region": "Asia Minor",
         "pa_innovator_reputation": 5.0,
         "material_transitions": [{"start_tick": 0, "distribution": {"parchment": 1.0}}],
         "script_transitions": [{"start_tick": 0, "distribution": {"uncial": 1.0}}],
-        "demand_schedule": {0: 10},
+        "demand_schedule": {0: 100},
     }
-
     with open(params_path, "w") as f:
         yaml.dump(config_data, f)
 
