@@ -12,9 +12,11 @@ import networkx as nx
 import yaml
 
 from pasim.config.schema import SimulationConfig
-from pasim.core.genealogy_generator import run_genealogy_generator
+from pasim.core.genealogy_generator import extract_genealogy_snapshot, run_genealogy_generator
+from pasim.core.genealogy_snapshot import GenealogySnapshot
 from pasim.core.rng import RNGContext
 from pasim.core.simulation_state import GenerationState
+from pasim.core.text_replay import TextReplayEngine
 from pasim.io.persistence import save_run  # Import the new persistence function
 
 
@@ -30,36 +32,14 @@ class SimulationResult:
     graph: nx.DiGraph
     config: SimulationConfig
     seed: int
+    genealogy_snapshot: GenealogySnapshot
 
 
 def run_single(params_path: str, seed: int = 20240105) -> SimulationResult:
     """
     Executes a single, in-memory simulation run.
-
-    This function performs the following steps:
-    1.  Validates that the provided `params_path` points to a real file
-        within the `experiments/` directory.
-    2.  Loads the YAML parameters from the file.
-    3.  Validates the loaded parameters against the `SimulationConfig` schema.
-    4.  Initializes a deterministic random number generator (`RNG`) from the
-        provided `seed`.
-    5.  Calls the core `run_genealogy_generator` to execute the simulation.
-    6.  Bundles the final state, graph, config, and seed into a
-        `SimulationResult` object.
-
-    Args:
-        params_path (str): The file path to the YAML configuration file.
-                           Must be located within the `experiments/` directory.
-        seed (int): The master seed for the random number generator to ensure
-                    reproducibility. Defaults to a fixed value.
-
-    Returns:
-        SimulationResult: A dataclass containing the complete results of the run.
-
-    Raises:
-        ValueError: If `params_path` is invalid, does not exist, or is not
-                    located within the `experiments/` directory.
-        FileNotFoundError: If the specified `params_path` does not exist.
+    It now splits the run into demographic simulation and dual text replay
+    (insertion and omission regimes).
     """
     # 1. Validate path
     if "experiments/" not in params_path:
@@ -77,16 +57,24 @@ def run_single(params_path: str, seed: int = 20240105) -> SimulationResult:
     # 4. Create RNG
     rng = RNGContext(seed).spawn(1)[0]
 
-    # 5. Run simulation
+    # 5. Run demographic simulation
+    # First, run the demographic layer to build the graph
     state = run_genealogy_generator(parameters=params_dict, rng=rng)
 
-    # 6. Return structured result
-    result = SimulationResult(
-        state=state,
-        graph=state.graph,
-        config=config,
-        seed=seed,
-    )
+    # 6. Extract genealogy snapshot
+    snapshot = extract_genealogy_snapshot(state)
+
+    # 7. Run text replay layer for the configured regime
+    # We use a separate seed for the replay to ensure independence from demographic randomness.
+    replay_seed = seed + 1000
+    replay_engine = TextReplayEngine(config, snapshot, replay_seed)
+    replayed_texts = replay_engine.run()
+
+    # Update state's instance_texts with replayed texts
+    state.registries.instance_texts = replayed_texts
+
+    # 8. Return structured result
+    result = SimulationResult(state=state, graph=state.graph, config=config, seed=seed, genealogy_snapshot=snapshot)
 
     # Save the run results using the persistence layer
     save_run(result, params_path)

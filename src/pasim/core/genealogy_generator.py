@@ -53,16 +53,15 @@ from scipy.spatial import KDTree
 from pasim.config.schema import SimulationConfig
 from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.genealogy import add_child_node, add_root_node, validate_genealogy_full
+from pasim.core.genealogy_snapshot import GenealogyNode, GenealogySnapshot
 from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.lifespan import sample_lifespan
 from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.reputation import sample_reputation
-from pasim.core.scribal_rules import apply_scribal_rule
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
 from pasim.core.spatial import generate_random_coordinates
 from pasim.core.state import DeathReason, Manuscript, Region, Witness
-from pasim.core.text_initialisation import make_initial_text
 
 logger = logging.getLogger(__name__)
 
@@ -322,8 +321,6 @@ def _spawn_new_manuscripts_from_demand(
                             birth_tick=current_tick,
                             reputation=reputation,
                         )
-                        new_text = make_initial_text(params)
-                        state.registries.instance_texts[instance_id] = new_text
                     else:
                         # No local exemplars found, but the graph is not empty.
                         # Select parents from all alive instances.
@@ -359,14 +356,6 @@ def _spawn_new_manuscripts_from_demand(
                             birth_tick=current_tick,
                             reputation=reputation,
                         )
-                        exemplar_texts = [state.registries.instance_texts[eid] for eid in random_parents]
-                        new_text = apply_scribal_rule(
-                            exemplar_texts=exemplar_texts,
-                            rng=rng,
-                            reputation=reputation,
-                            config=params,
-                        )
-                        state.registries.instance_texts[instance_id] = new_text
                 else:  # Exemplars were found by select_exemplars
                     add_child_node(
                         graph=state.graph,
@@ -377,15 +366,6 @@ def _spawn_new_manuscripts_from_demand(
                         birth_tick=current_tick,
                         reputation=reputation,
                     )
-                    # This is a copy, so generate its text from exemplars
-                    exemplar_texts = [state.registries.instance_texts[eid] for eid in exemplars]
-                    new_text = apply_scribal_rule(
-                        exemplar_texts=exemplar_texts,
-                        rng=rng,
-                        reputation=reputation,
-                        config=params,
-                    )
-                    state.registries.instance_texts[instance_id] = new_text
 
                 # 4. Update state
                 state.alive_manuscripts.add(manuscript_id)
@@ -479,6 +459,40 @@ def advance_tick(
         logger.debug(f"Tick {state.tick}: Periodic full genealogy validation passed.")
 
     return state
+
+
+def extract_genealogy_snapshot(state: GenerationState) -> GenealogySnapshot:
+    """
+    Extracts a serialisable snapshot of the demographic genealogy from the simulation state.
+    """
+    nodes = []
+    # Sort by birth tick to be clean
+    sorted_node_ids = sorted(state.graph.nodes, key=lambda n: (state.graph.nodes[n]["birth_tick"], n))
+
+    for node_id in sorted_node_ids:
+        node_data = state.graph.nodes[node_id]
+        manuscript = state.registries.manuscripts.get(node_data["manuscript_id"])
+        witness = state.registries.witnesses.get(node_data["witness_id"])
+
+        parent_ids = list(state.graph.predecessors(node_id))
+
+        nodes.append(
+            GenealogyNode(
+                instance_id=node_id,
+                witness_id=node_data["witness_id"],
+                manuscript_id=node_data["manuscript_id"],
+                birth_tick=node_data["birth_tick"],
+                death_tick=manuscript.death_tick,
+                parent_ids=parent_ids,
+                region=manuscript.region,
+                material=manuscript.material,
+                script=witness.script,
+                reputation=node_data["reputation"],
+                location=manuscript.location,
+            )
+        )
+
+    return GenealogySnapshot(nodes=nodes)
 
 
 def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationState:

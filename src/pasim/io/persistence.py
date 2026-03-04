@@ -254,6 +254,14 @@ def _save_events_log(run_dir: Path, result: "SimulationResult"):
                     f.write(f"[TICK {event['tick']}] Instance {event['id']} created (autograph)\n")
 
 
+def _save_genealogy_snapshot(run_dir: Path, result: "SimulationResult"):
+    """
+    Saves the full genealogy snapshot to a JSON file.
+    """
+    with open(run_dir / "genealogy_snapshot.json", "w") as f:
+        json.dump(result.genealogy_snapshot.to_dict(), f, indent=2, cls=CustomJsonEncoder)
+
+
 def save_run(result: "SimulationResult", params_path: str):
     """
     Public entry point to save the essential simulation output for reproducibility.
@@ -268,6 +276,7 @@ def save_run(result: "SimulationResult", params_path: str):
     _save_config(run_dir, params_path_obj)
     _save_run_metadata(run_dir, result)
     _save_genealogy(run_dir, result)
+    _save_genealogy_snapshot(run_dir, result)
     _save_instances(run_dir, result)
     _save_manuscripts(run_dir, result)
     _save_instance_texts(run_dir, result)

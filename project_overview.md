@@ -16,9 +16,11 @@ To accurately model textual transmission, the simulation distinguishes between s
 
 -   **Witness**: Represents the textual content found within a specific manuscript. A Manuscript owns exactly one Witness. A Witness has its own unique ID and is linked to its parent Manuscript. Witnesses are tracked in a `WitnessRegistry`.
 
--   **Witness Instance / Genealogy Node**: This is an abstract representation in the genealogy graph. Each Witness has exactly one Witness Instance, which corresponds to a node in the `networkx` graph. This node stores only structural information (like its ID and links to its Witness and Manuscript via foreign keys) and its `birth_tick`. Crucially, **it does NOT store regional, geographic, material, or `death_tick` data**, as these belong to the `Manuscript` object. The graph thus focuses purely on the lineage and copying relationships between textual instances.
+-   **Witness Instance / Genealogy Node**: This is an abstract representation in the genealogy graph. Each Witness has exactly one Witness Instance, which corresponds to a node in the `networkx` graph. A `GenealogyNode` (defined in `core/genealogy_snapshot.py`) captures the essential demographic metadata for a single instance, including its `instance_id`, `birth_tick`, `death_tick`, `parent_ids`, `region`, `material`, `script`, `reputation`, and `location`. This structure allows for the complete decoupling of the demographic simulation from the textual evolution.
 
-    To ensure efficient lookup between a `Manuscript` (with its rich metadata) and its corresponding `Witness Instance` (graph node), a direct mapping (`manuscript_to_instance_map`) is maintained within the simulation's `GenerationState` (now housed in `core/simulation_state.py`). This map is populated at the exact moment a `Manuscript` and its `Witness Instance` are created together in an atomic operation (specifically within `_spawn_new_manuscripts_from_demand`). This guarantees the correctness of the mapping and allows for O(1) retrieval of a `Witness Instance`'s ID given a `Manuscript`'s ID, without needing to iterate through intermediate registries or graph nodes.
+-   **Genealogy Snapshot**: A `GenealogySnapshot` is a serialisable collection of `GenealogyNode` objects. it represents the full structural and demographic history of a simulation run, containing everything required to replay textual transmission deterministically without re-running the demographic layer. It contains no textual data.
+
+    To ensure efficient lookup between a `Manuscript` (with its rich metadata) and its corresponding `Witness Instance` (graph node), a direct mapping (`manuscript_to_instance_map`) is maintained within the simulation's `GenerationState`. This map is populated at the moment of creation.
 
 The relationship can be visualized as:
 `Manuscript` (physical attributes)
@@ -41,6 +43,11 @@ The simulation is designed to be fully parameter-driven, allowing researchers to
     1.  **Historical Shocks** (e.g., `persecutions`): Discrete, instantaneous events that "shock" the system, such as a persecution that destroys a fraction of manuscripts at a specific time.
     2.  **Environmental Regimes** (e.g., `material_transitions`, `script_transitions`): Long-term, evolving environmental conditions that affect the properties of **newly created** entities. This is used to model gradual shifts in technology or culture.
     3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics. The `demand_schedule` now specifies *aggregate* demand across all regions for specific ticks. The simulation internally distributes this demand deterministically across regions based on historical allocation rules and a ceiling rounding mechanism. If a tick is not explicitly defined, the last known aggregate demand value is used, ensuring continuity.
+    4.  **PA Regime Configuration**: Specific parameters defining the textual intervention:
+        *   `pa_regime`: Either `"insertion"` or `"omission"`.
+        *   `pa_intervention_year`: The tick at which the intervention occurs.
+        *   `pa_intervention_region`: The region where the change originates.
+        *   `pa_innovator_reputation`: The reputation assigned to the witness introducing the change.
 
 ## Dependency Management
 
@@ -99,6 +106,28 @@ The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`.
 -   Ensuring each run receives a unique, derived seed for natural RNG variability.
 -   Implementing a retry mechanism for individual runs, allowing failures to be recorded and retried without halting the entire batch.
 -   Collecting results from all runs (including failure records) and returning a comprehensive summary.
+
+### Simulation Execution Layers
+
+The simulation is split into two distinct functional layers to ensure modularity and reproducibility:
+
+#### 1. Demographic Layer (Graph Builder)
+Responsible for all non-textual aspects of the simulation:
+- Demand generation and manuscript spawning.
+- Manuscript lifecycles (birth, natural death, and destruction).
+- Parent selection for new copies.
+- Region, material, script, and reputation assignment.
+
+This layer is deterministic under a seed and produces a `GenealogySnapshot`. It does not generate or mutate any text.
+
+#### 2. Text Replay Layer
+Given a `GenealogySnapshot`, a textual regime (insertion/omission), and a seed, this layer:
+- Initializes the autograph text based on the regime.
+- Traversing nodes in birth order.
+- Applies copying (majority voting) and mutation rules.
+- Replays the textual transmission over the fixed demographic scaffold.
+
+This separation allows researchers to run multiple textual experiments (e.g., comparing regimes) on the exact same underlying demographic history.
 
 ### Single-Run Execution
 
@@ -161,7 +190,7 @@ To facilitate rigorous academic analysis and ensure full reproducibility, the `p
 This persistence layer saves all critical simulation artifacts as structured, human-readable plain text files, enabling researchers to:
 
 -   **Reconstruct any experiment**: By saving the exact `config.yaml` used for the run.
--   **Trace the full textual genealogy**: Through `genealogy.json` (graph structure) and `instances.json` (witness instance metadata).
+-   **Trace the full textual genealogy**: Through `genealogy.json` (graph structure), `instances.json` (witness instance metadata), and `genealogy_snapshot.json` (the complete, serialisable demographic record for textual replay).
 -   **Inspect manuscript lifecycles**: Using `manuscripts.json` (full manuscript registry).
 -   **Analyze textual evolution**: With `instance_texts.tsv` providing the complete content of every generated text.
 -   **Monitor simulation dynamics**: Via `telemetry.json` (per-tick metrics) and `events.log` (chronological log of key simulation events).
@@ -190,6 +219,8 @@ This core distinction—shocks that alter existing state versus environments tha
     -   `exemplar_selection.py`: Implements the two-stage exemplar selection logic, which combines geographical proximity with textual authority (reputation) to choose parents for new manuscripts.
     -   `scribal_rules.py`: Implements the composite scribal rule, which is the high-level pipeline for generating a new textual witness. It composes the base transmission, reputation-to-error-intensity, and mutation modules to simulate the full act of copying.
     -   `genealogy.py`: Defines the structural genealogy of witness instances using a `networkx` directed acyclic graph (DAG). It tracks ancestry, timing, and topology (who copied from whom and when).
+    -   `genealogy_snapshot.py`: Defines the `GenealogyNode` and `GenealogySnapshot` data structures, providing a serialisable and regime-neutral record of all demographic events (births, deaths, regions, and reputations).
+    -   `text_replay.py`: Implements the `TextReplayEngine`, which takes a `GenealogySnapshot` and a textual regime and re-runs the textual evolution rules (transmission, mutation) over the fixed demographic history.
     -   `genealogy_generator.py`: Orchestrates the deterministic, tick-based generation of the genealogy graph. It uses a state-machine-like process, advancing tick by tick and hosting the injection of scientific rules. It now manages the lifecycle of manuscripts, including their deterministic death, migration, and demand-based spawning. The `GenerationState` dataclass and its `initialise_generation_state` function have been moved to `simulation_state.py` to resolve circular dependencies.
     -   `historical_events.py`: Provides the framework for the **Temporal-Historical Rule Engine**, including the base `HistoricalEvent` abstraction, the `HistoricalEventManager` for dispatching events, and concrete implementations like `PersecutionEvent` (modeling mass destruction of manuscripts). It now directly imports `GenerationState` from `simulation_state.py`.
     -   `simulation_state.py`: Defines the `GenerationState` dataclass, which encapsulates the complete state for a genealogy generation run, along with the `initialise_generation_state` function. This module centralizes the definition of the core simulation state and resolves circular import dependencies with `genealogy_generator.py` and `historical_events.py`.
