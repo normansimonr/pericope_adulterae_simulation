@@ -65,7 +65,7 @@ def test_text_replay_determinism(config):
 
 
 def test_regime_neutrality(config):
-    """Verify that different regimes (insertion/omission) share the same parent graph but can have different texts."""
+    """Verify that different regimes (insertion/omission) share the same parent graph but have different texts."""
     seed = 555
     rng = RNGContext(seed).spawn(1)[0]
     state = run_genealogy_generator(config.model_dump(), rng)
@@ -82,8 +82,34 @@ def test_regime_neutrality(config):
     engine_omi = TextReplayEngine(config_omi, snapshot, replay_seed)
     texts_omi = engine_omi.run()
 
-    # In Phase 2B, regimes don't yet change text, so they should be identical for now.
-    # But the infrastructure should support them being different later.
     assert texts_ins.keys() == texts_omi.keys()
+    # Now they SHOULD differ starting from the root
     for tid in texts_ins:
-        np.testing.assert_array_equal(texts_ins[tid], texts_omi[tid])
+        # Root is all 0s vs all 1s. This difference propagates.
+        assert not np.array_equal(texts_ins[tid], texts_omi[tid])
+
+
+def test_regime_dependent_autograph(config):
+    """Verify that the autograph initialization is regime-dependent."""
+    seed = 123
+    rng = RNGContext(seed).spawn(1)[0]
+    state = run_genealogy_generator(config.model_dump(), rng)
+    snapshot = extract_genealogy_snapshot(state)
+
+    # Check for "insertion" regime
+    config_ins = config.model_copy(update={"pa_regime": "insertion"})
+    engine_ins = TextReplayEngine(config_ins, snapshot, seed)
+    texts_ins = engine_ins.run()
+    # Find the autograph (root node with no parents)
+    root_node = next(n for n in snapshot.nodes if not n.parent_ids)
+    root_text_ins = texts_ins[root_node.instance_id]
+    assert np.all(root_text_ins == 0)
+    assert len(root_text_ins) == config.text_length
+
+    # Check for "omission" regime
+    config_omi = config.model_copy(update={"pa_regime": "omission"})
+    engine_omi = TextReplayEngine(config_omi, snapshot, seed)
+    texts_omi = engine_omi.run()
+    root_text_omi = texts_omi[root_node.instance_id]
+    assert np.all(root_text_omi == 1)
+    assert len(root_text_omi) == config.text_length

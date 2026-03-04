@@ -54,10 +54,8 @@ class TextReplayEngine:
         """Processes a single node, generating its text."""
         if not node.parent_ids:
             # Root node / autograph
-            # In Phase 2B, we don't have PA genome overrides yet,
-            # but we know 0 is legal.
+            # The initial genome is regime-dependent (all 0 for insertion, all 1 for omission)
             text = make_initial_text(self.config)
-            # TODO: In Phase 3, apply PA regime specific autograph here.
         else:
             parent_texts = [self.instance_texts[pid] for pid in node.parent_ids]
             text = apply_scribal_rule(exemplar_texts=parent_texts, rng=rng, reputation=node.reputation, config=self.config)
