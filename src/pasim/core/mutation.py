@@ -100,14 +100,20 @@ def mutate_tagged_string(
     # Identify where the random choice is the same as the current value
     mask_resample = new_values == current_values_at_indices
 
-    # For elements where new_value == current_value, we need to pick a different value.
-    # We can apply a simple transformation that guarantees a different value
-    # (e.g., increment modulo max_val, adjusted for 1-based indexing).
-    # This introduces a slight bias but is fully vectorized.
+    # If some elements picked the same value as their current value, we need to pick
+    # a different value. To remain deterministic and vectorized, we shift to the
+    # "next" value in the sorted alphabet.
     if np.any(mask_resample):
-        # max_val = LEGAL_SEGMENT_VALUES.max() (which is 5)
-        # The new value should be (current_value % max_val) + 1
-        new_values[mask_resample] = (current_values_at_indices[mask_resample] % LEGAL_SEGMENT_VALUES.max()) + 1
+        alphabet_size = len(LEGAL_SEGMENT_VALUES)
+        # Find the index of each current value in the sorted alphabet.
+        # np.searchsorted is efficient for this.
+        indices_in_alphabet = np.searchsorted(LEGAL_SEGMENT_VALUES, current_values_at_indices[mask_resample])
+
+        # Shift the index by 1 (wrapping around) to guarantee a different value.
+        new_alphabet_indices = (indices_in_alphabet + 1) % alphabet_size
+
+        # Map back to the actual legal values.
+        new_values[mask_resample] = LEGAL_SEGMENT_VALUES[new_alphabet_indices]
 
     # Apply the new values to the `new_string` at the `indices_to_mutate`
     new_string[indices_to_mutate] = new_values

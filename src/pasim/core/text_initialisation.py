@@ -17,4 +17,4 @@ def make_initial_text(config: SimulationConfig) -> np.ndarray:
         A numpy array of int16 zeros representing the initial text.
     """
     length = config.text_length
-    return np.full(length, 1, dtype=np.int16)
+    return np.zeros(length, dtype=np.int16)

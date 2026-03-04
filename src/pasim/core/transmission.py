@@ -19,6 +19,8 @@ from typing import List, TypeAlias
 import numpy as np
 from numpy.typing import NDArray
 
+from pasim.core.tagged_string_constraints import LEGAL_SEGMENT_VALUES
+
 # For type hinting clarity
 TaggedString: TypeAlias = NDArray[np.int16]
 
@@ -84,9 +86,8 @@ def majority_from_exemplars(parent_texts: List[TaggedString], rng: np.random.Gen
     # stacked_texts will have shape (num_parents, num_segments)
     stacked_texts = np.array(parent_texts)  # Automatically stacks if List[NDArray]
 
-    # Assume legal segment values are 1, 2, 3, 4, 5 as per tagged_string_constraints
-    possible_values = np.array([1, 2, 3, 4, 5], dtype=dtype)
-    # num_possible_values = len(possible_values) # Not directly used in new vectorized code
+    # Use the authoritative legal segment values from tagged_string_constraints
+    possible_values = LEGAL_SEGMENT_VALUES.astype(dtype)
 
     # Create a mask for each possible value across all parents and segments
     # expanded_values shape: (num_possible_values, 1, 1)
@@ -94,7 +95,7 @@ def majority_from_exemplars(parent_texts: List[TaggedString], rng: np.random.Gen
     # comparison result shape: (num_possible_values, num_parents, num_segments)
     matches_per_value_parent_segment = possible_values[:, np.newaxis, np.newaxis] == stacked_texts[np.newaxis, :, :]
 
-    # Count occurrences of each value (1-5) for each segment
+    # Count occurrences of each value (0-5) for each segment
     # Sum along num_parents axis (axis=1): (num_possible_values, num_segments)
     counts_per_value_segment = np.sum(matches_per_value_parent_segment, axis=1)
 

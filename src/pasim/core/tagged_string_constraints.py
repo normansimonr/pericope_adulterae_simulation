@@ -25,7 +25,7 @@ from pasim.config.schema import SimulationConfig
 # The single, authoritative definition of the set of legal integer values
 # that a segment in a tagged string can hold. This is the "alphabet" of
 # our textual model. It is defined as a NumPy array for efficient lookups.
-LEGAL_SEGMENT_VALUES: NDArray[np.int16] = np.array([1, 2, 3, 4, 5], dtype=np.int16)
+LEGAL_SEGMENT_VALUES: NDArray[np.int16] = np.array([0, 1, 2, 3, 4, 5], dtype=np.int16)
 LEGAL_SEGMENT_VALUES_SET: frozenset[int] = frozenset(LEGAL_SEGMENT_VALUES.tolist())
 
 # For type hinting clarity.

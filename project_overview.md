@@ -714,7 +714,7 @@ This module serves as the authoritative source for defining the legal state spac
 
 **Key Constants and Functions:**
 
-*   **`LEGAL_SEGMENT_VALUES` (NDArray[np.int16]):** A NumPy array explicitly listing all permissible integer values that a single segment within a tagged string can hold (currently `[1, 2, 3, 4, 5]`). This acts as the "alphabet" for the textual model.
+*   **`LEGAL_SEGMENT_VALUES` (NDArray[np.int16]):** A NumPy array explicitly listing all permissible integer values that a single segment within a tagged string can hold (currently `[0, 1, 2, 3, 4, 5]`). This acts as the "alphabet" for the textual model, where `0` represents textual absence.
 *   **`SegmentValue` (Type Alias):** An alias for `np.int16` for clarity in type hinting.
 *   **`is_valid_segment_value(value: SegmentValue) -> bool`:**
     *   A simple predicate function that checks if a given integer `value` is present within `LEGAL_SEGMENT_VALUES`.
