@@ -44,7 +44,7 @@ class CustomJsonEncoder(json.JSONEncoder):
 # ... (rest of the file remains the same until _resolve_run_directory) ...
 
 
-def _resolve_run_directory(params_path: Path) -> Path:
+def resolve_run_directory(params_path: Path) -> Path:
     """
     Determines a unique run directory path and ensures its existence.
     Robustly handles concurrent calls from parallel processes.
@@ -97,18 +97,15 @@ def _save_config(run_dir: Path, params_path: Path):
     shutil.copy(params_path, run_dir / "config.yaml")
 
 
-def _save_run_metadata(run_dir: Path, result: "SimulationResult"):
+def _save_demographic_metadata(run_dir: Path, result: "SimulationResult"):
     """
-    Saves high-level simulation metadata to a JSON file.
+    Saves high-level demographic metadata to a JSON file in the run root.
     """
     graph = result.graph
     num_nodes = graph.number_of_nodes()
     num_edges = graph.number_of_edges()
 
-    # Total manuscripts: all ever created, regardless of death
-    # Accessing .manuscripts directly from the StateRegistry
     total_manuscripts = len(result.state.registries.manuscripts)
-    # Total instances: all nodes in the genealogy graph
     total_instances = num_nodes
 
     metadata = {
@@ -119,7 +116,24 @@ def _save_run_metadata(run_dir: Path, result: "SimulationResult"):
         "graph_nodes": num_nodes,
         "graph_edges": num_edges,
     }
-    with open(run_dir / "run_metadata.json", "w") as f:
+    with open(run_dir / "demographic_metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2, cls=CustomJsonEncoder)
+
+
+def _save_regime_metadata(regime_dir: Path, result: "SimulationResult", regime_name: str):
+    """
+    Saves regime-specific metadata including PA intervention details.
+    """
+    replay = result.replays[regime_name]
+
+    metadata = {
+        "pa_regime": replay.pa_regime,
+        "pa_intervention_year": result.config.pa_intervention_year,
+        "pa_intervention_region": result.config.pa_intervention_region,
+        "pa_innovator_reputation": result.config.pa_innovator_reputation,
+        "replay_seed": replay.seed,
+    }
+    with open(regime_dir / "run_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2, cls=CustomJsonEncoder)
 
 
@@ -173,22 +187,22 @@ def _save_manuscripts(run_dir: Path, result: "SimulationResult"):
         json.dump(manuscripts_data, f, indent=2, cls=CustomJsonEncoder)
 
 
-def _save_instance_texts(run_dir: Path, result: "SimulationResult"):
+def _save_instance_texts(regime_dir: Path, result: "SimulationResult", texts: dict[str, np.ndarray]):
     """
-    Saves all instance texts in TSV format.
+    Saves all instance texts in TSV format for a specific regime.
     """
-    file_path = run_dir / "instance_texts.tsv"
+    file_path = regime_dir / "instance_texts.tsv"
     with open(file_path, "w") as f:
-        if not result.state.registries.instance_texts:
+        if not texts:
             return  # No texts to save
 
         # Determine text length and generate header
-        first_instance_id = next(iter(result.state.registries.instance_texts))
-        text_length = len(result.state.registries.instance_texts[first_instance_id])
+        first_instance_id = next(iter(texts))
+        text_length = len(texts[first_instance_id])
         header = "instance_id\t" + "\t".join(f"token_{i}" for i in range(text_length))
         f.write(header + "\n")
 
-        # Get instance IDs and their birth ticks, then sort
+        # Get instance IDs and their birth ticks from the graph, then sort
         instance_birth_ticks = []
         for node_id, data in result.graph.nodes(data=True):
             instance_birth_ticks.append((node_id, data["birth_tick"]))
@@ -196,7 +210,7 @@ def _save_instance_texts(run_dir: Path, result: "SimulationResult"):
 
         # Write texts in order
         for instance_id, _ in instance_birth_ticks:
-            text_array = result.state.registries.instance_texts.get(instance_id)
+            text_array = texts.get(instance_id)
             if text_array is not None:
                 text_str = "\t".join(map(str, text_array.tolist()))
                 f.write(f"{instance_id}\t{text_str}\n")
@@ -262,23 +276,47 @@ def _save_genealogy_snapshot(run_dir: Path, result: "SimulationResult"):
         json.dump(result.genealogy_snapshot.to_dict(), f, indent=2, cls=CustomJsonEncoder)
 
 
+def save_demographics(result: "SimulationResult", run_dir: Path, params_path: Path):
+    """
+    Saves shared demographic and configuration data at the run root.
+    """
+    _save_config(run_dir, params_path)
+    _save_demographic_metadata(run_dir, result)
+    _save_genealogy(run_dir, result)
+    _save_genealogy_snapshot(run_dir, result)
+    _save_instances(run_dir, result)
+    _save_manuscripts(run_dir, result)
+    _save_telemetry(run_dir, result)
+    _save_events_log(run_dir, result)
+
+
+def save_replay(result: "SimulationResult", run_dir: Path, regime_name: str):
+    """
+    Saves regime-specific textual data in a subdirectory.
+    """
+    regime_dir = run_dir / regime_name
+    regime_dir.mkdir(parents=True, exist_ok=True)
+
+    replay = result.replays[regime_name]
+    _save_regime_metadata(regime_dir, result, regime_name)
+    _save_instance_texts(regime_dir, result, replay.instance_texts)
+
+
 def save_run(result: "SimulationResult", params_path: str):
     """
     Public entry point to save the essential simulation output for reproducibility.
+    Orchestrates saving shared demographic data and regime-specific textual data.
 
     Args:
         result: The SimulationResult object containing all simulation outputs.
         params_path: The path to the original parameters file.
     """
     params_path_obj = Path(params_path)
-    run_dir = _resolve_run_directory(params_path_obj)
+    run_dir = resolve_run_directory(params_path_obj)
 
-    _save_config(run_dir, params_path_obj)
-    _save_run_metadata(run_dir, result)
-    _save_genealogy(run_dir, result)
-    _save_genealogy_snapshot(run_dir, result)
-    _save_instances(run_dir, result)
-    _save_manuscripts(run_dir, result)
-    _save_instance_texts(run_dir, result)
-    _save_telemetry(run_dir, result)
-    _save_events_log(run_dir, result)  # New call
+    # 1. Save shared demographic and configuration data at the run root
+    save_demographics(result, run_dir, params_path_obj)
+
+    # 2. Save regime-specific data in subdirectories
+    for regime_name in result.replays:
+        save_replay(result, run_dir, regime_name)

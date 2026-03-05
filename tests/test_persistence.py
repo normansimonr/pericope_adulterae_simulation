@@ -91,35 +91,51 @@ class TestPersistence:
     def test_all_required_files_exist(self, run_simulation_and_get_paths):
         _, run_dir, _ = run_simulation_and_get_paths
 
-        expected_files = [
+        # Shared files in run root
+        expected_shared_files = [
             "config.yaml",
-            "run_metadata.json",
+            "demographic_metadata.json",
             "genealogy.json",
             "instances.json",
             "manuscripts.json",
-            "instance_texts.tsv",
             "telemetry.json",
             "events.log",
         ]
 
-        for file_name in expected_files:
-            assert (run_dir / file_name).is_file(), f"Missing file: {file_name}"
+        for file_name in expected_shared_files:
+            assert (run_dir / file_name).is_file(), f"Missing shared file: {file_name}"
+
+        # Regime-specific files in subdirectories
+        for regime in ["insertion", "omission"]:
+            regime_dir = run_dir / regime
+            assert regime_dir.is_dir(), f"Missing regime directory: {regime}"
+            assert (regime_dir / "run_metadata.json").is_file(), f"Missing regime metadata for {regime}"
+            assert (regime_dir / "instance_texts.tsv").is_file(), f"Missing instance texts for {regime}"
 
     # --- 4. Test: Metadata Integrity ---
 
     def test_metadata_integrity(self, run_simulation_and_get_paths):
         result, run_dir, seed = run_simulation_and_get_paths
 
-        with open(run_dir / "run_metadata.json", "r") as f:
-            metadata = json.load(f)
+        # Check demographic metadata
+        with open(run_dir / "demographic_metadata.json", "r") as f:
+            demo_metadata = json.load(f)
 
-        assert metadata["seed"] == seed
-        assert metadata["graph_nodes"] == len(result.graph.nodes)
-        assert metadata["graph_edges"] == len(result.graph.edges)
-        assert metadata["total_instances"] == len(result.state.registries.witnesses)
-        assert metadata["final_tick"] == result.state.tick
-        # Ensure total_manuscripts is also consistent
-        assert metadata["total_manuscripts"] == len(result.state.registries.manuscripts)
+        assert demo_metadata["seed"] == seed
+        assert demo_metadata["graph_nodes"] == len(result.graph.nodes)
+        assert demo_metadata["graph_edges"] == len(result.graph.edges)
+        assert demo_metadata["total_instances"] == len(result.graph.nodes)
+        assert demo_metadata["final_tick"] == result.state.tick
+        assert demo_metadata["total_manuscripts"] == len(result.state.registries.manuscripts)
+
+        # Check regime-specific metadata
+        for regime in ["insertion", "omission"]:
+            with open(run_dir / regime / "run_metadata.json", "r") as f:
+                regime_metadata = json.load(f)
+
+            assert regime_metadata["pa_regime"] == regime
+            assert regime_metadata["pa_intervention_year"] == result.config.pa_intervention_year
+            assert "replay_seed" in regime_metadata
 
     # --- 5. Test: Genealogy Consistency ---
 
@@ -162,46 +178,47 @@ class TestPersistence:
     def test_instance_text_table_integrity(self, run_simulation_and_get_paths):
         result, run_dir, _ = run_simulation_and_get_paths
 
-        tsv_path = run_dir / "instance_texts.tsv"
-        with open(tsv_path, "r") as f:
-            lines = f.readlines()
+        for regime in ["insertion", "omission"]:
+            tsv_path = run_dir / regime / "instance_texts.tsv"
+            with open(tsv_path, "r") as f:
+                lines = f.readlines()
 
-        assert len(lines) > 1, "TSV file should have at least a header and one data row"
+            assert len(lines) > 1, f"TSV file for {regime} should have at least a header and one data row"
 
-        header = lines[0].strip().split("	")
+            header = lines[0].strip().split("\t")
 
-        # Header should contain 'instance_id' and then 'token_0', 'token_1', ...
-        assert header[0] == "instance_id"
-        assert len(header) == result.config.text_length + 1, "Header token count mismatch"
-        for i in range(result.config.text_length):
-            assert header[i + 1] == f"token_{i}"
+            # Header should contain 'instance_id' and then 'token_0', 'token_1', ...
+            assert header[0] == "instance_id"
+            assert len(header) == result.config.text_length + 1, f"Header token count mismatch for {regime}"
+            for i in range(result.config.text_length):
+                assert header[i + 1] == f"token_{i}"
 
-        # Number of rows equals number of instances
-        assert len(lines) - 1 == len(result.state.registries.witnesses), "TSV row count mismatch"
+            # Number of rows equals number of instances
+            assert len(lines) - 1 == len(result.graph.nodes), f"TSV row count mismatch for {regime}"
 
-        # All tokens are integers and compare some random instances
-        all_instance_ids = list(result.state.registries.instance_texts.keys())
+            # All tokens are integers and compare some random instances
+            all_instance_ids = list(result.replays[regime].instance_texts.keys())
 
-        num_checks = min(3, len(all_instance_ids))  # Check up to 3 random instances
-        rng_local = np.random.default_rng(result.seed)  # Use a local RNG for reproducibility of random checks
-        instances_to_check = rng_local.choice(all_instance_ids, size=num_checks, replace=False)
+            num_checks = min(3, len(all_instance_ids))  # Check up to 3 random instances
+            rng_local = np.random.default_rng(result.seed)  # Use a local RNG for reproducibility of random checks
+            instances_to_check = rng_local.choice(all_instance_ids, size=num_checks, replace=False)
 
-        for line in lines[1:]:  # Skip header
-            parts = line.strip().split("	")
-            instance_id = parts[0]
-            tokens_str = parts[1:]
+            for line in lines[1:]:  # Skip header
+                parts = line.strip().split("\t")
+                instance_id = parts[0]
+                tokens_str = parts[1:]
 
-            # Check if all tokens are integers
-            for token_str in tokens_str:
-                assert token_str.isdigit() or (token_str.startswith("-") and token_str[1:].isdigit()), (
-                    f"Non-integer token found: {token_str}"
-                )
+                # Check if all tokens are integers
+                for token_str in tokens_str:
+                    assert token_str.isdigit() or (token_str.startswith("-") and token_str[1:].isdigit()), (
+                        f"Non-integer token found in {regime}: {token_str}"
+                    )
 
-            # If this is one of the instances we want to check, compare with in-memory
-            if instance_id in instances_to_check:
-                in_memory_text = result.state.registries.instance_texts[instance_id]
-                tsv_text = np.array([int(t) for t in tokens_str], dtype=np.int16)
-                np.testing.assert_array_equal(in_memory_text, tsv_text, f"Text mismatch for instance {instance_id}")
+                # If this is one of the instances we want to check, compare with in-memory
+                if instance_id in instances_to_check:
+                    in_memory_text = result.replays[regime].instance_texts[instance_id]
+                    tsv_text = np.array([int(t) for t in tokens_str], dtype=np.int16)
+                    np.testing.assert_array_equal(in_memory_text, tsv_text, f"Text mismatch for instance {instance_id} in {regime}")
 
     # --- 7. Test: Telemetry Equality ---
 

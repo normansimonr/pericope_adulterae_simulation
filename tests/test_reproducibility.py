@@ -32,7 +32,7 @@ def test_full_simulation_reproducibility(tmp_path):
             {"start_tick": 0, "distribution": {"uncial": 1.0}},
             {"start_tick": 8, "distribution": {"uncial": 0.5, "minuscule": 0.5}},
         ],
-        "demand_schedule": {0: 5, 5: 10},
+        "demand_schedule": {0: 20, 5: 40},
     }
 
     with open(params_path, "w") as f:
@@ -79,11 +79,14 @@ def test_full_simulation_reproducibility(tmp_path):
         assert w1.manuscript_id == w2.manuscript_id
         assert w1.script == w2.script
 
-    # 5. Check instance texts
-    assert len(result1.state.registries.instance_texts) == len(result2.state.registries.instance_texts)
-    for i_id, t1 in result1.state.registries.instance_texts.items():
-        t2 = result2.state.registries.instance_texts[i_id]
-        np.testing.assert_array_equal(t1, t2)
+    # 5. Check instance texts for both regimes
+    for regime in ["insertion", "omission"]:
+        texts1 = result1.replays[regime].instance_texts
+        texts2 = result2.replays[regime].instance_texts
+        assert len(texts1) == len(texts2)
+        for i_id, t1 in texts1.items():
+            t2 = texts2[i_id]
+            np.testing.assert_array_equal(t1, t2)
 
     # 6. Check alive manuscripts
     assert result1.state.alive_manuscripts == result2.state.alive_manuscripts
