@@ -67,6 +67,10 @@ The simulation is designed to be fully parameter-driven, allowing researchers to
         *   `pa_intervention_year`: The tick at which the intervention occurs.
         *   `pa_intervention_region`: The region where the change originates.
         *   `pa_innovator_reputation`: The reputation assigned to the witness introducing the change.
+    5.  **Execution Configuration**:
+        *   `persistence_level`: Controls the verbosity of data saved to disk.
+            *   `minimal`: Only saves the aggregated `results.csv` at the experiment root. This is the default and is optimized for large Monte Carlo batches.
+            *   `full`: Saves all detailed run artefacts (genealogies, full texts, logs) in per-run subdirectories, in addition to the aggregated results.
 
 ## Dependency Management
 
@@ -223,9 +227,24 @@ To enhance debug observability during testing, the simulator includes a test-tim
 
 ## Research Data Persistence
 
-To facilitate rigorous academic analysis and ensure full reproducibility, the `pasim` framework includes a comprehensive research-grade persistence layer. Every execution of `run_single()` automatically generates a unique, timestamped run directory (`experiments/<experiment_name>/runs/<run_number>/`) containing a complete snapshot of the simulation's output, split into shared demographic data and regime-specific textual data.
+To facilitate rigorous academic analysis and ensure full reproducibility, the `pasim` framework includes a comprehensive research-grade persistence layer with configurable verbosity and parallel-safe aggregation.
 
-This persistence layer saves all critical simulation artifacts as structured, human-readable plain text files:
+### Persistence Levels
+
+The system supports two persistence levels via the `--persistence-level` CLI flag:
+
+-   **Minimal Persistence (Default)**: Optimized for high-throughput simulations. It avoids creating thousands of small files and directories. Instead, it only produces a single `results.csv` at the experiment root containing the most critical summary data for each run and regime.
+-   **Full Persistence**: In addition to `results.csv`, it generates unique run directories containing every simulation artefact (genealogies, full textual states, logs). This is essential for deep inspection of specific runs but can consume significant disk space.
+
+### Parallel-Safe Aggregation
+
+Since simulations run in parallel, the system uses a distributed writing strategy to avoid concurrent write contention on the final results file:
+
+1.  **Worker Phase**: Each parallel worker writes a unique temporary CSV file (e.g., `run_12_insertion.csv`) into a `temp_results/` directory within the experiment root. This ensures no two processes ever attempt to write to the same file.
+2.  **Aggregation Phase**: Once all parallel runs are complete, the orchestrator performs a final "merge" step. It reads all temporary files, concatenates them, sorts the data by `run_id` and `regime`, and writes the final `results.csv`.
+3.  **Cleanup**: The temporary directory is then deleted, leaving only the clean aggregated output.
+
+### Persistent Artefacts (Full Level)
 
 -   **Shared Demographic Data (Run Root)**:
     -   `config.yaml`: An exact copy of the input configuration file.
@@ -300,7 +319,22 @@ This core distinction—shocks that alter existing state versus environments tha
             -   `instance_texts.tsv`: A tab-separated file containing the textual content of all witness instances, ordered by birth_tick, ensuring streaming writes for large datasets.
             -   `telemetry.json`: The raw telemetry log from the simulation.
             -   `events.log`: A chronological plain-text log of key simulation events (manuscript creation/death, instance creation with parent info).
-        -   For experiments: The `experiment_metadata.json` file is created at the experiment root (`experiments/<experiment_name>/`) to provide a durable record describing the experiment as a whole. This includes its parameters, execution status, overall run counts (successful, failed, retried), and timestamps.    -   `formats.py`: For handling different data formats.
+        -   For experiments: The `experiment_metadata.json` file is created at the experiment root (`experiments/<experiment_name>/`) to provide a durable record describing the experiment as a whole. This includes its parameters, execution status, overall run counts (successful, failed, retried), and timestamps.
+
+### `src/pasim/io/results_writer.py`
+
+This module provides the worker-side logic for writing temporary, parallel-safe simulation results.
+
+-   **`write_temp_result`**: Writes a single-row CSV file for a specific run and regime into a temporary directory. This avoids write contention during parallel execution.
+-   **`serialize_majority_text`**: Converts a majority text genome (list of integers) into a compact string representation, preserving leading zeros and handling empty survivor sets.
+
+### `src/pasim/io/results_aggregator.py`
+
+This module implements the final aggregation step for Monte Carlo experiments.
+
+-   **`aggregate_results`**: Scans the temporary results directory, merges all individual run rows into a single `results.csv` file at the experiment root, sorts them deterministically by `run_id` and regime, and cleans up the temporary files.
+
+### `src/pasim/io/formats.py`
     -   `output.py`: For writing simulation outputs.
     -   `aggregation.py`: For aggregating results from multiple runs.
 -   **`utils/`**: Contains common utility functions used across the project.

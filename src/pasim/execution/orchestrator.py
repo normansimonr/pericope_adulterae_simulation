@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from pasim.config.schema import SimulationConfig
 from pasim.execution.parallel import run_parallel
+from pasim.io.results_aggregator import aggregate_results
 
 
 def _get_experiment_metadata_path(params_path_obj: Path) -> Path:
@@ -17,7 +18,7 @@ def _get_experiment_metadata_path(params_path_obj: Path) -> Path:
     return experiment_dir / "experiment_metadata.json"
 
 
-def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
+def run_experiment(params_path: Union[Path, str], persistence_level: str = "minimal") -> Dict[str, Any]:
     """
     Executes a complete experiment definition, orchestrating multiple parallel
     Monte Carlo runs based on the provided parameters file.
@@ -29,6 +30,7 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
         params_path: The file path to the YAML configuration file defining the experiment.
                      This file must contain 'n_runs' and may optionally contain 'max_retries'
                      and a base 'seed'.
+        persistence_level: The level of data persistence: 'minimal' or 'full'.
 
     Returns:
         A dictionary summarizing the overall experiment execution, including counts
@@ -44,6 +46,7 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
     metadata: Dict[str, Any] = {
         "experiment_id": params_file_path.parent.name,
         "params_path": str(params_file_path.name),
+        "persistence_level": persistence_level,
         "execution_status": "started",
         "start_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "end_timestamp": None,
@@ -90,8 +93,14 @@ def run_experiment(params_path: Union[Path, str]) -> Dict[str, Any]:
 
         # Invoke the parallel orchestrator
         experiment_summary = cast(
-            Dict[str, Any], run_parallel(str(params_file_path), n_runs=n_runs, max_retries=max_retries, seed=base_seed)
+            Dict[str, Any],
+            run_parallel(
+                str(params_file_path), n_runs=n_runs, max_retries=max_retries, seed=base_seed, persistence_level=persistence_level
+            ),
         )
+
+        # 2. Final Aggregation Step
+        aggregate_results(params_file_path.parent)
 
         # Calculate retried_runs
         retried_runs_count = sum(record["attempt"] for record in experiment_summary.get("failure_records", []))

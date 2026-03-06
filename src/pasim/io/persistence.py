@@ -50,9 +50,9 @@ class CustomJsonEncoder(json.JSONEncoder):
 # ... (rest of the file remains the same until _resolve_run_directory) ...
 
 
-def resolve_run_directory(params_path: Path) -> Path:
+def resolve_run_directory(params_path: Path, create_dir: bool = True) -> Path:
     """
-    Determines a unique run directory path and ensures its existence.
+    Determines a unique run directory path. If create_dir is True, ensures its existence.
     Robustly handles concurrent calls from parallel processes.
 
     Given a params_path like 'experiments/exp000_baseline/params.yaml',
@@ -60,30 +60,37 @@ def resolve_run_directory(params_path: Path) -> Path:
 
     Args:
         params_path: Path to the experiment's parameters file.
+        create_dir: Whether to actually create the directory on disk.
 
     Returns:
-        The Path to the newly created unique run directory.
+        The Path to the unique run directory.
     """
     experiment_dir = params_path.parent
     runs_dir = experiment_dir / "runs"
-    runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure parent 'runs' directory exists
+
+    if create_dir:
+        runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure parent 'runs' directory exists
 
     # Implement a retry loop to find a unique run number in a concurrent-safe way
     max_retries = 10
     for _ in range(max_retries):
         existing_run_numbers = []
-        for item in runs_dir.iterdir():
-            if item.is_dir():
-                try:
-                    existing_run_numbers.append(int(item.name))
-                except ValueError:
-                    continue  # Ignore non-integer named directories
+        if runs_dir.is_dir():
+            for item in runs_dir.iterdir():
+                if item.is_dir():
+                    try:
+                        existing_run_numbers.append(int(item.name))
+                    except ValueError:
+                        continue  # Ignore non-integer named directories
 
         next_run_number = 1
         if existing_run_numbers:
             next_run_number = max(existing_run_numbers) + 1
 
         run_dir = runs_dir / str(next_run_number)
+
+        if not create_dir:
+            return run_dir
 
         try:
             run_dir.mkdir(parents=True)  # Attempt to create the directory exclusively

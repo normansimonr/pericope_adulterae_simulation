@@ -13,6 +13,8 @@ def _run_wrapper(
     params_path: str,
     seed: int,
     max_retries: int,
+    persistence_level: str = "full",
+    run_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Wrapper function to execute a single simulation run with retry logic.
@@ -20,7 +22,7 @@ def _run_wrapper(
     """
     for attempt in range(max_retries + 1):
         try:
-            result = run_single(params_path=params_path, seed=seed)
+            result = run_single(params_path=params_path, seed=seed, persistence_level=persistence_level, run_id=run_id)
             return {
                 "status": "success",
                 "result": result,
@@ -55,6 +57,7 @@ def run_parallel(
     max_retries: int,
     seed: Optional[int] = None,
     num_processes: Optional[int] = None,
+    persistence_level: str = "full",
 ) -> Dict[str, Any]:
     """
     Orchestrates multiple independent simulation runs in parallel.
@@ -67,6 +70,7 @@ def run_parallel(
                               If None, a default fixed seed is used.
         num_processes (Optional[int]): The number of parallel processes to use.
                                        If None, it defaults to the number of CPUs.
+        persistence_level (str): The level of data persistence: 'minimal' or 'full'.
 
     Returns:
         Dict[str, Any]: A summary of the parallel execution, including counts of
@@ -94,7 +98,10 @@ def run_parallel(
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
         # Submit all runs to the executor
-        futures = {executor.submit(_run_wrapper, params_path, run_seeds[i], max_retries): run_seeds[i] for i in range(n_runs)}
+        futures = {
+            executor.submit(_run_wrapper, params_path, run_seeds[i], max_retries, persistence_level, i + 1): run_seeds[i]
+            for i in range(n_runs)
+        }
 
         for future in as_completed(futures):
             current_seed = int(futures[future])  # Retrieve and convert to int

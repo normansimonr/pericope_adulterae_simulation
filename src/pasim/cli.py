@@ -9,10 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import yaml
 
-import pasim.config.schema
 import pasim.execution.orchestrator
-import pasim.execution.parallel
-import pasim.execution.runner
 
 logger = logging.getLogger("pasim")
 
@@ -94,7 +91,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
     try:
         logger.info(f"Starting experiment from {params_path}...")
-        summary = pasim.execution.orchestrator.run_experiment(params_path)
+        summary = pasim.execution.orchestrator.run_experiment(params_path, persistence_level=args.persistence_level)
 
         if summary["failed_runs"] > 0:
             logger.error(f"Experiment completed with {summary['failed_runs']} failures out of {summary['total_requested_runs']} runs.")
@@ -276,6 +273,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     # Run command
     run_parser = subparsers.add_parser("run", help="Run a simulation experiment.", parents=[parent_parser])
     run_parser.add_argument("params_path", type=str, help="Path to the experiment's params.yaml file.")
+    run_parser.add_argument(
+        "--persistence-level",
+        type=str,
+        choices=["minimal", "full"],
+        default="minimal",
+        help="Persistence level: 'minimal' (aggregated results only) or 'full' (all artefacts). Default: 'minimal'.",
+    )
     run_parser.set_defaults(func=_cmd_run)
 
     # Reset command

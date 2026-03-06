@@ -145,6 +145,9 @@ class SimulationConfig(BaseModel):
     pa_intervention_region: Region
     pa_innovator_reputation: float = Field(..., ge=1.0, le=5.0)
 
+    # Execution / Persistence Configuration
+    persistence_level: Literal["minimal", "full"] = "minimal"
+
     @model_validator(mode="after")
     def validate_pa_intervention_year(self):
         """Ensures pa_intervention_year is within simulation total_ticks."""
