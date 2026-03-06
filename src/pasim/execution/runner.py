@@ -20,6 +20,7 @@ from pasim.core.genealogy_generator import extract_genealogy_snapshot, run_genea
 from pasim.core.genealogy_snapshot import GenealogySnapshot
 from pasim.core.rng import RNGContext
 from pasim.core.simulation_state import GenerationState
+from pasim.core.survivor_sampler import SamplingResult, sample_survivors
 from pasim.core.text_replay import TextReplayEngine
 from pasim.io.persistence import resolve_run_directory, save_demographics, save_replay
 
@@ -49,6 +50,7 @@ class SimulationResult:
     config: SimulationConfig
     seed: int
     genealogy_snapshot: GenealogySnapshot
+    survivor_sampling_result: SamplingResult = field(default_factory=lambda: SamplingResult([], 0, {}))
     replays: Dict[str, ReplayResult] = field(default_factory=dict)
 
 
@@ -94,22 +96,26 @@ def run_single(params_path: str, seed: int = 20240105) -> SimulationResult:
     # 6. Extract genealogy snapshot for replay
     snapshot = extract_genealogy_snapshot(state)
 
-    # 7. Initialize result container
+    # 7. Perform survivorship sampling (New Stage)
+    sampling_result = sample_survivors(snapshot, seed, config.total_ticks)
+
+    # 8. Initialize result container
     result = SimulationResult(
         state=state,
         graph=state.graph,
         config=config,
         seed=seed,
         genealogy_snapshot=snapshot,
+        survivor_sampling_result=sampling_result,
     )
 
-    # 8. Resolve run directory and save demographics BEFORE replay
+    # 9. Resolve run directory and save demographics BEFORE replay
     # This ensures that even if replay fails, the demographic scaffold is preserved.
     params_path_obj = Path(params_path)
     run_dir = resolve_run_directory(params_path_obj)
     save_demographics(result, run_dir, params_path_obj)
 
-    # 9. Run text replay for both regimes and save them independently
+    # 10. Run text replay for both regimes and save them independently
     for regime in ["insertion", "omission"]:
         # Create a regime-specific config override
         regime_config = config.model_copy(update={"pa_regime": regime})

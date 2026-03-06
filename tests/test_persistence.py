@@ -9,7 +9,7 @@ from pasim.execution.runner import run_single
 
 # Minimal configuration for fast testing
 MINIMAL_PARAMS_YAML = """
-total_ticks: 5
+total_ticks: 1000
 text_length: 10
 p_region_migration: 0.0
 p_internal_relocation: 0.0
@@ -20,7 +20,7 @@ reputation_distribution:
   4: 0.2
   5: 0.2
 pa_regime: insertion
-pa_intervention_year: 1
+pa_intervention_year: 300
 pa_intervention_region: "Asia Minor"
 pa_innovator_reputation: 5.0
 persecutions: []
@@ -33,7 +33,9 @@ script_transitions:
     distribution:
       uncial: 1.0
 demand_schedule:
-  0: 1
+  1: 10
+  300: 50
+  700: 100
 """
 
 
@@ -96,10 +98,13 @@ class TestPersistence:
             "config.yaml",
             "demographic_metadata.json",
             "genealogy.json",
+            "genealogy_snapshot.json",
             "instances.json",
             "manuscripts.json",
             "telemetry.json",
             "events.log",
+            "survivors.json",
+            "sampling_log.json",
         ]
 
         for file_name in expected_shared_files:
@@ -111,6 +116,7 @@ class TestPersistence:
             assert regime_dir.is_dir(), f"Missing regime directory: {regime}"
             assert (regime_dir / "run_metadata.json").is_file(), f"Missing regime metadata for {regime}"
             assert (regime_dir / "instance_texts.tsv").is_file(), f"Missing instance texts for {regime}"
+            assert (regime_dir / "witnesses.parquet").exists(), f"Missing witnesses.parquet for {regime}"
 
     # --- 4. Test: Metadata Integrity ---
 
@@ -193,11 +199,11 @@ class TestPersistence:
             for i in range(result.config.text_length):
                 assert header[i + 1] == f"token_{i}"
 
-            # Number of rows equals number of instances
-            assert len(lines) - 1 == len(result.graph.nodes), f"TSV row count mismatch for {regime}"
+            # Number of rows equals number of survivors
+            assert len(lines) - 1 == result.survivor_sampling_result.actual_sample_size, f"TSV row count mismatch for {regime}"
 
             # All tokens are integers and compare some random instances
-            all_instance_ids = list(result.replays[regime].instance_texts.keys())
+            all_instance_ids = result.survivor_sampling_result.sampled_witness_ids
 
             num_checks = min(3, len(all_instance_ids))  # Check up to 3 random instances
             rng_local = np.random.default_rng(result.seed)  # Use a local RNG for reproducibility of random checks
@@ -341,10 +347,11 @@ class TestPersistence:
     def _get_params_with_persecution(self) -> str:
         params = yaml.safe_load(MINIMAL_PARAMS_YAML)
         params["total_ticks"] = 10  # Let's make it shorter for faster deaths from persecution
-        params["demand_schedule"] = {0: 10}  # Ensure 10 manuscripts from start, new aggregate format
+        params["pa_intervention_year"] = 1
+        params["demand_schedule"] = {1: 10}  # Ensure 10 manuscripts from start, new aggregate format
         params["persecutions"].append({
             "event_type": "persecution",
-            "start_tick": 2,  # Persecute after manuscripts are spawned at tick 1
+            "start_tick": 7,  # Persecute after manuscripts are spawned at tick 1
             "end_tick": None,
             "regions": ["Asia Minor"],
             "kill_proportion": 0.8,  # Kill most

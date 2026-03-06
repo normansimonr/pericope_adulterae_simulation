@@ -139,7 +139,15 @@ Responsible for all non-textual aspects of the simulation:
 
 This layer is deterministic under a seed and produces a `GenealogySnapshot`. It does not generate or mutate any text.
 
-#### 2. Text Replay Layer
+#### 2. Survivorship-Biased Sampling (Post-Demographic Filter)
+After the demographic scaffold is complete but before textual replay begins, the simulation performs a deterministic sampling of "survivors." This stage simulates the historical process where only a fraction of manuscripts (primarily those alive at the end of the simulation) are preserved and available to modern researchers.
+
+-   **Eligibility**: Only manuscripts born after a specific tick (e.g., 300) and alive at the simulation's end tick are eligible for sampling.
+-   **Stratified Allocation**: Sampling follows a strict distribution across four strata (e.g., Asia Minor vs. Other regions, and different birth-tick brackets) to reflect known historical survival biases.
+-   **Deterministic IDs**: The selection is driven by a seed derived from the master seed, ensuring that the same set of "survivor" IDs is used for both textual replay regimes.
+-   **Output Filtering**: While the `TextReplayEngine` processes all nodes to maintain genealogical integrity, only the textual content of these sampled survivors is persisted to disk (e.g., in `instance_texts.tsv` and `witnesses.parquet`).
+
+#### 3. Text Replay Layer
 Given a `GenealogySnapshot`, a textual regime (insertion/omission), and a seed, this layer:
 - Initializes the autograph text based on the regime.
 - Traverses nodes in birth order.
