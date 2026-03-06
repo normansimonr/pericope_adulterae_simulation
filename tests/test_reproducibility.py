@@ -95,6 +95,21 @@ def test_full_simulation_reproducibility(tmp_path):
     assert len(result1.state.telemetry) == len(result2.state.telemetry)
     assert result1.state.telemetry == result2.state.telemetry
 
+    # 8. Check GenealogySnapshot
+    assert len(result1.genealogy_snapshot.nodes) == len(result2.genealogy_snapshot.nodes)
+    for node1, node2 in zip(result1.genealogy_snapshot.nodes, result2.genealogy_snapshot.nodes):
+        assert node1.instance_id == node2.instance_id
+        assert node1.witness_id == node2.witness_id
+        assert node1.manuscript_id == node2.manuscript_id
+        assert node1.birth_tick == node2.birth_tick
+        assert node1.death_tick == node2.death_tick
+        assert node1.parent_ids == node2.parent_ids
+        assert node1.region == node2.region
+        assert node1.material == node2.material
+        assert node1.script == node2.script
+        assert node1.reputation == node2.reputation
+        assert node1.location == node2.location
+
 
 def test_different_seeds_produce_different_results(tmp_path):
     """

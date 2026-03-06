@@ -18,7 +18,7 @@ To accurately model textual transmission, the simulation distinguishes between s
 
 -   **Witness Instance / Genealogy Node**: This is an abstract representation in the genealogy graph. Each Witness has exactly one Witness Instance, which corresponds to a node in the `networkx` graph. A `GenealogyNode` (defined in `core/genealogy_snapshot.py`) captures the essential demographic metadata for a single instance, including its `instance_id`, `birth_tick`, `death_tick`, `parent_ids`, `region`, `material`, `script`, `reputation`, and `location`. This structure allows for the complete decoupling of the demographic simulation from the textual evolution.
 
--   **Genealogy Snapshot**: A `GenealogySnapshot` is a serialisable collection of `GenealogyNode` objects. it represents the full structural and demographic history of a simulation run, containing everything required to replay textual transmission deterministically without re-running the demographic layer. It contains no textual data.
+-   **Genealogy Snapshot**: A `GenealogySnapshot` is a serialisable collection of `GenealogyNode` objects. It represents the full structural and demographic history of a simulation run, containing everything required to replay textual transmission deterministically without re-running the demographic layer. It contains no textual data. This allows the demographic "scaffold" to be generated once and then used for multiple textual experiments (e.g., dual-regime comparison).
 
     To ensure efficient lookup between a `Manuscript` (with its rich metadata) and its corresponding `Witness Instance` (graph node), a direct mapping (`manuscript_to_instance_map`) is maintained within the simulation's `GenerationState`. This map is populated at the moment of creation.
 
@@ -30,6 +30,25 @@ The relationship can be visualized as:
            `+-- represented by --> Witness Instance` (graph node)
 
 This separation ensures that the abstract genealogical structure remains clean and unburdened by the evolving physical properties of the manuscripts.
+
+## Regime-Neutral Scaffold and Textual Replay
+
+A core architectural principle of `pasim` is the separation of the demographic history from the textual evolution. This is achieved through a two-stage process:
+
+1.  **Demographic Generation**: The simulation first generates a `GenealogySnapshot` (the "scaffold"). This stage is purely demographic and involves manuscript spawning, migration, and parent-child link creation. It is deterministic under a single seed and does not involve any textual data or PA-specific logic.
+2.  **Textual Replay**: The `TextReplayEngine` takes the fixed `GenealogySnapshot` and applies a specific textual regime (e.g., "insertion" or "omission"). It traverses the graph in birth order, initializes the autograph, and applies scribal rules (copying and mutation) to each node.
+
+**Dual-Regime Execution:** Every simulation run automatically executes the text replay layer twice—once for the `"insertion"` regime and once for the `"omission"` regime—using the same demographic `GenealogySnapshot`. This ensures a perfectly controlled comparison where both textual traditions evolve over an identical historical population.
+
+## PA Intervention and Innovator Selection
+
+The Pericope Adulterae (PA) intervention is a unique textual event that occurs once per simulation run within each regime.
+
+-   **Deterministic Innovator Selection**: To ensure reproducibility and scientific rigor, the "innovator" (the node that introduces the textual change) is selected deterministically from the `GenealogySnapshot`. Among all nodes born at the `pa_intervention_year` in the `pa_intervention_region`, the one with the highest local manuscript density (number of neighbors within a fixed `PA_INTERVENTION_RADIUS`) is chosen. Ties are broken using the lowest numeric `instance_id`.
+-   **Textual Change**:
+    -   In the **Insertion** regime, the autograph is all `0`s (textual absence), and the innovator introduces the passage (all `1`s).
+    -   In the **Omission** regime, the autograph is all `1`s (textual presence), and the innovator removes the passage (all `0`s).
+-   **Reputation Override**: The innovator is assigned a specific `pa_innovator_reputation`, which may differ from its naturally sampled reputation, to model the authoritative or influential nature of the intervention.
 
 ## Configuration and Parameterization
 
@@ -285,47 +304,6 @@ The `pasim` framework will facilitate the following general workflow for researc
 6.  **Reporting**: Results and analyses will be outputted in various formats for researchers to study.
 
 This setup enables researchers to explore various hypotheses about the textual history of the Pericope Adulterae by adjusting simulation parameters and observing the emergent textual traditions.
-
-## Testing
-
-### `tests/test_historical_dynamics.py`
-
-This test module ensures that the historical and temporal systems of the simulation behave correctly and reproducibly. It contains a suite of tests that validate the determinism, correctness, and isolation of the various dynamic components of the simulation engine.
-
-These tests guarantee that historical dynamics are deterministic, parameter-driven, and isolated from core mechanics. They verify that scheduled events (like persecutions) and environmental transitions (like material or script usage) behave correctly and reproducibly.
-
--   **Persecution Correctness Test**: Verifies that a persecution event correctly removes a specified proportion of manuscripts from the alive set within a targeted region, without affecting manuscripts in other regions or the integrity of the genealogy graph.
--   **Persecution Determinism Test**: Ensures that running a simulation with a persecution event multiple times with the same seed produces the exact same set of destroyed manuscripts, and that different seeds lead to different outcomes.
--   **Material Transition Test**: Validates that newly spawned manuscripts are assigned materials according to the time-dependent probability distribution defined in the `MaterialTransitionManager`. It asserts that manuscripts created before and after a transition point have the expected materials and that existing manuscripts' materials are not altered.
--   **Script Transition Test**: Similar to the material transition test, this verifies that newly created witness instances are assigned scripts (e.g., uncial, minuscule) based on the active schedule in the `ScriptTransitionManager`.
--   **Demand Schedule Test**: Confirms that the simulation spawns new manuscripts to meet the minimum numbers specified in the regional demand schedule and that the logic for retrieving demand correctly falls back to the last known value for ticks not explicitly defined.
--   **Migration Determinism Test**: Guarantees that the stochastic process of manuscript migration (both between and within regions) is fully deterministic for a given seed, producing identical migration histories across identical runs.
--   **Event Ordering Stability Test**: Checks that the `HistoricalEventManager` correctly processes events based on their `start_tick`, regardless of their order in the configuration file, ensuring stable and predictable outcomes.
--   **No Side-Effect Tests**: Verifies that manager components (`HistoricalEventManager`, `MaterialTransitionManager`, `ScriptTransitionManager`) do not cause unintended side effects, such as modifying the simulation's tick or state, when they are called.
-
-These tests are crucial for ensuring the scientific validity and reproducibility of the simulation, providing confidence that the results are a direct consequence of the configured parameters and not artifacts of implementation errors.
-
-### `tests/test_reproducibility.py`
-
-This module contains high-level reproducibility tests for the entire simulation system. It ensures that the simulation is fully deterministic and that its results are solely a function of the input parameters and the random seed. These tests validate that:
-
--   Running the same simulation twice with identical parameters and the same seed produces bit-for-bit identical results across all registries (manuscripts, witnesses, instance texts), the genealogy graph structure (nodes and edges), and the telemetry log.
--   Running the simulation with different seeds produces distinct results, confirming that the random number generation is properly influencing the simulation's stochastic processes.
--   The `run_single` entry point correctly handles parameter validation and RNG initialization for a complete, isolated simulation run.
-
-### `tests/test_persistence.py`
-
-This module contains a comprehensive test suite for the research data persistence layer, ensuring its correctness, determinism, and integrity. These tests validate that:
-
--   Run directories are created correctly, following a numbered sequence (e.g., `1`, `2`, `3`).
--   All required output files (`config.yaml`, `run_metadata.json`, `genealogy.json`, `instances.json`, `manuscripts.json`, `instance_texts.tsv`, `telemetry.json`, `events.log`) are present after a simulation run.
--   The contents of `run_metadata.json` are consistent with the simulation's `SimulationResult` object (seed, graph nodes/edges, total instances/manuscripts, final tick).
--   The `genealogy.json` file accurately reflects the in-memory genealogy graph in terms of node and edge counts, and references valid node IDs.
--   `instance_texts.tsv` correctly stores textual data, with an appropriate header, the correct number of rows, integer tokens, and content matching in-memory NumPy arrays for selected instances.
--   `telemetry.json` precisely matches the in-memory telemetry data from the simulation.
--   `events.log` contains comprehensive coverage of key simulation events, including instance births, manuscript births, and manuscript deaths.
--   The persistence process itself does not mutate the in-memory simulation state, ensuring data integrity before and after saving.
-
 
 ## Detailed Module and File Summaries
 

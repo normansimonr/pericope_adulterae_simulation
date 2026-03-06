@@ -7,7 +7,7 @@ from pasim.execution.runner import run_single
 
 # Minimal configuration for testing dual-regime
 DUAL_REGIME_CONFIG = """
-total_ticks: 5
+total_ticks: 10
 text_length: 10
 p_region_migration: 0.1
 p_internal_relocation: 0.1
@@ -18,7 +18,7 @@ reputation_distribution:
   4: 0.2
   5: 0.2
 pa_regime: insertion
-pa_intervention_year: 1
+pa_intervention_year: 5
 pa_intervention_region: "Asia Minor"
 pa_innovator_reputation: 5.0
 persecutions: []
@@ -31,8 +31,8 @@ script_transitions:
     distribution:
       uncial: 1.0
 demand_schedule:
-  0: 5
-  3: 10
+  1: 20
+  5: 40
 """
 
 
@@ -62,6 +62,16 @@ def test_dual_regime_structure(temp_experiment_dir: Path):
     assert (run_dir / "config.yaml").exists()
     assert (run_dir / "demographic_metadata.json").exists()
 
+    # Verify that only ONE genealogy file and ONE snapshot file were created
+    # by checking the count of files matching those names in the run directory.
+    # (Since we just checked their existence, we just need to ensure no duplicates in subdirs)
+    all_files = list(run_dir.rglob("*"))
+    genealogy_files = [f for f in all_files if f.name == "genealogy.json"]
+    snapshot_files = [f for f in all_files if f.name == "genealogy_snapshot.json"]
+
+    assert len(genealogy_files) == 1
+    assert len(snapshot_files) == 1
+
     # Check for regime subdirectories
     assert (run_dir / "insertion").exists()
     assert (run_dir / "omission").exists()
@@ -71,6 +81,9 @@ def test_dual_regime_structure(temp_experiment_dir: Path):
         regime_dir = run_dir / regime
         assert (regime_dir / "run_metadata.json").exists()
         assert (regime_dir / "instance_texts.tsv").exists()
+        # Verify no genealogy file in the regime subdir
+        assert not (regime_dir / "genealogy.json").exists()
+        assert not (regime_dir / "genealogy_snapshot.json").exists()
 
 
 def test_dual_regime_identical_genealogy(temp_experiment_dir: Path):
