@@ -147,7 +147,15 @@ After the demographic scaffold is complete but before textual replay begins, the
 -   **Deterministic IDs**: The selection is driven by a seed derived from the master seed, ensuring that the same set of "survivor" IDs is used for both textual replay regimes.
 -   **Output Filtering**: While the `TextReplayEngine` processes all nodes to maintain genealogical integrity, only the textual content of these sampled survivors is persisted to disk (e.g., in `instance_texts.tsv` and `witnesses.parquet`).
 
-#### 3. Text Replay Layer
+#### 3. Majority Text Computation (Post-Persistence Analysis)
+Immediately after persisting the sampled witnesses for a given regime, the simulation computes the **Majority Text** of the surviving tradition.
+
+-   **Alignment**: All sampled witnesses are aligned segment-by-segment.
+-   **Mode Reading**: For each segment, the most frequent value (mode) across all survivors is chosen as the "majority" reading.
+-   **Deterministic Tie-Breaking**: If multiple readings are tied for the highest frequency, the numerically smallest value is chosen to ensure perfect reproducibility.
+-   **Output**: The resulting majority text is saved as `majority_text.json` within the regime's directory, providing a concise summary of the surviving textual tradition.
+
+#### 4. Text Replay Layer
 Given a `GenealogySnapshot`, a textual regime (insertion/omission), and a seed, this layer:
 - Initializes the autograph text based on the regime.
 - Traverses nodes in birth order.

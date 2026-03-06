@@ -1,5 +1,6 @@
 import dataclasses  # For handling dataclasses
 import json
+import logging
 import shutil
 import time  # Import time for a small backoff
 from enum import Enum
@@ -9,11 +10,15 @@ from typing import TYPE_CHECKING, List, cast  # Added TYPE_CHECKING
 import numpy as np
 import pydantic  # For Pydantic models
 
+from pasim.analysis.majority_text import compute_majority_text, save_majority_text
 from pasim.core.state import DeathReason
 from pasim.core.survivor_sampler import save_sampling_results
 
 if TYPE_CHECKING:  # Added conditional import
     from pasim.execution.runner import SimulationResult
+
+
+logger = logging.getLogger(__name__)
 
 
 class CustomJsonEncoder(json.JSONEncoder):
@@ -320,6 +325,16 @@ def save_replay(result: "SimulationResult", run_dir: Path, regime_name: str):
     replay = result.replays[regime_name]
     _save_regime_metadata(regime_dir, result, regime_name)
     _save_instance_texts(regime_dir, result, replay.instance_texts)
+
+    # 3. Compute and save majority text
+    survivor_ids = result.survivor_sampling_result.sampled_witness_ids
+    if not survivor_ids:
+        logger.warning(f"No survivors sampled for regime {regime_name}. Skipping majority text computation.")
+        save_majority_text([], regime_dir)
+    else:
+        survivor_genomes = [replay.instance_texts[sid] for sid in survivor_ids if sid in replay.instance_texts]
+        majority_segments = compute_majority_text(survivor_genomes)
+        save_majority_text(majority_segments, regime_dir)
 
 
 def save_run(result: "SimulationResult", params_path: str):
