@@ -130,6 +130,16 @@ The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`.
 -   **Robust Retry Logic**: It implements a retry mechanism for individual tasks, allowing failures to be recorded and retried without halting the entire batch.
 -   **Result Collection**: It collects summaries from all workers (including failure records) and returns a comprehensive summary of the entire experiment.
 
+### Mutation Rule: Restricted Mutation on Absent Segments
+
+To ensure realistic scribal behavior, the mutation system enforces a specific restriction on segments representing textual absence (value `0`):
+
+-   **Single-Parent Rule**: If a manuscript is produced from exactly one parent exemplar, any segment inherited as `0` is considered **immutable**. The scribe cannot "mutate" a passage into existence if it was not present in the source. In this scenario, `0` always transitions to `0`.
+-   **Multi-Parent Rule**: When a manuscript is produced via contamination (multi-parent transmission), the existing mutation probabilities apply to all segments, including those resolved as `0`. This allows for the possibility of segments being introduced during the more complex process of resolving multiple sources.
+-   **Non-Zero Segments**: Segments with non-zero values (existing readings) continue to follow standard mutation behavior regardless of the number of parents.
+
+This rule ensures that in direct transmission lineages, absent passages remain absent unless explicitly introduced by a historical intervention.
+
 ### Simulation Execution Layers
 
 The simulation is split into two distinct functional layers to ensure modularity and reproducibility:

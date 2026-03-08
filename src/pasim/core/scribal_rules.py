@@ -89,6 +89,12 @@ def apply_scribal_rule(
     proportion = expected_mutation_proportion(reputation, mutation_mapping)
 
     # Stage 3: Mutation
-    mutated_text = mutate_tagged_string(base_text, rng, proportion, config)
+    # RULE: If a manuscript has exactly one parent and the inherited reading for
+    # a segment is 0, then mutation must not occur at that segment.
+    immutable_mask = None
+    if len(exemplar_texts) == 1:
+        immutable_mask = (base_text == 0)
+
+    mutated_text = mutate_tagged_string(base_text, rng, proportion, config, immutable_mask=immutable_mask)
 
     return mutated_text

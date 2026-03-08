@@ -18,6 +18,7 @@ ensure that all mutations result in a valid textual state.
 """
 
 import numpy as np
+from typing import Optional
 from numpy.typing import NDArray
 
 from pasim.config.schema import SimulationConfig
@@ -30,6 +31,7 @@ def mutate_tagged_string(
     rng: np.random.Generator,
     expected_proportion: float,
     config: SimulationConfig,
+    immutable_mask: Optional[NDArray[np.bool_]] = None,
 ) -> NDArray[np.int16]:
     """
     Applies scribal mutations to a tagged string.
@@ -45,6 +47,8 @@ def mutate_tagged_string(
         expected_proportion: A float in the interval [0.0, 1.0] representing
                              the expected proportion of segments to mutate.
         config: The simulation configuration object.
+        immutable_mask: An optional boolean mask where True indicates segments
+                         that must NOT be mutated.
 
     Returns:
         A new, mutated tagged string.
@@ -57,6 +61,10 @@ def mutate_tagged_string(
         - The number of segments to mutate is calculated by rounding the product
           of `expected_proportion` and the total string length.
         - A set of unique indices is chosen randomly for mutation.
+        - If an `immutable_mask` is provided, indices are chosen only from
+          the mutable segments (where the mask is False).
+        - If the number of requested mutations exceeds the available mutable
+          segments, all available mutable segments are mutated.
         - Each chosen segment's value is replaced by a *different* legal value,
           sampled uniformly from the available alternatives.
 
@@ -74,14 +82,26 @@ def mutate_tagged_string(
     if expected_proportion == 0.0:
         return tagged_string.copy()
 
-    # Calculate the number of segments to mutate
+    # Calculate the target number of segments to mutate
     n_mutations = int(round(expected_proportion * config.text_length))
 
     if n_mutations == 0:
         return tagged_string.copy()
 
-    # Randomly select unique indices to mutate
-    indices_to_mutate = rng.choice(config.text_length, size=n_mutations, replace=False)
+    # Identify indices that can be mutated
+    if immutable_mask is not None:
+        mutable_indices = np.where(~immutable_mask)[0]
+    else:
+        mutable_indices = np.arange(config.text_length)
+
+    # Adjust n_mutations if it exceeds available mutable indices
+    n_to_mutate = min(n_mutations, len(mutable_indices))
+
+    if n_to_mutate == 0:
+        return tagged_string.copy()
+
+    # Randomly select unique indices to mutate from the mutable set
+    indices_to_mutate = rng.choice(mutable_indices, size=n_to_mutate, replace=False)
 
     # Create a new array to store the mutated string
     new_string = tagged_string.copy()
@@ -90,10 +110,10 @@ def mutate_tagged_string(
     current_values_at_indices = new_string[indices_to_mutate]
 
     # Generate random choices from all possible legal values for the positions to mutate
-    # The size of this random array is `n_mutations`
+    # The size of this random array is `n_to_mutate`
     new_values = rng.choice(
         LEGAL_SEGMENT_VALUES,  # Using the global LEGAL_SEGMENT_VALUES from tagged_string_constraints
-        size=n_mutations,
+        size=n_to_mutate,
         replace=True,  # Allow duplicates, as different positions can mutate to same value
     )
 
