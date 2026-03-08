@@ -71,11 +71,18 @@ def derive_replay_seed(base_seed: int, regime: str) -> int:
     return (base_seed + regime_hash) & 0xFFFFFFFF
 
 
-def run_single(params_path: str, seed: int = 20240105, persistence_level: str = "full", run_id: Optional[int] = None) -> SimulationResult:
+def run_single(
+    params_path: str,
+    seed: int = 20240105,
+    persistence_level: str = "full",
+    run_id: Optional[int] = None,
+    regime: Optional[str] = None,
+) -> SimulationResult:
     """
     Executes a single, in-memory simulation run.
     It splits the run into demographic simulation and dual text replay
     (insertion and omission regimes) over the same genealogy snapshot.
+    If a specific regime is provided, only that regime is replayed.
     """
     # 1. Validate path
     if "experiments/" not in params_path:
@@ -103,18 +110,22 @@ def run_single(params_path: str, seed: int = 20240105, persistence_level: str = 
     # 6. Extract genealogy snapshot for replay
     snapshot = extract_genealogy_snapshot(state)
 
-    # 7. Perform survivorship sampling (New Stage)
+    # 7. Perform survivorship sampling
     sampling_result = sample_survivors(snapshot, seed, config.total_ticks)
 
     # 8. Resolve run directory and ID
     params_path_obj = Path(params_path)
     if run_id is None:
+        # Fallback to old dynamic resolution if run_id not provided
         run_dir = resolve_run_directory(params_path_obj, create_dir=(persistence_level == "full"))
         run_id = int(run_dir.name)
     else:
-        run_dir = params_path_obj.parent / "runs" / str(run_id)
+        # Use deterministic run_id-based folder if full persistence
         if persistence_level == "full":
+            run_dir = params_path_obj.parent / "runs" / f"run_{run_id}"
             run_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            run_dir = None
 
     # 9. Initialize result container
     result = SimulationResult(
@@ -127,32 +138,37 @@ def run_single(params_path: str, seed: int = 20240105, persistence_level: str = 
         survivor_sampling_result=sampling_result,
     )
 
-    # 10. Save demographics if requested
-    if persistence_level == "full":
-        save_demographics(result, run_dir, params_path_obj)
+    # 10. Save demographics if requested (only once per run_id)
+    if persistence_level == "full" and run_dir:
+        # To avoid race conditions in parallel mode, only the designated regime ('insertion')
+        # writes the shared demographics. If no specific regime is provided, we also write.
+        if regime is None or regime == "insertion":
+            save_demographics(result, run_dir, params_path_obj)
 
-    # 11. Run text replay for both regimes and save them independently
-    for regime in ["insertion", "omission"]:
+    # 11. Run text replay for requested regimes
+    target_regimes = [regime] if regime else ["insertion", "omission"]
+
+    for r in target_regimes:
         # Create a regime-specific config override
-        regime_config = config.model_copy(update={"pa_regime": regime})
+        regime_config = config.model_copy(update={"pa_regime": r})
 
         # Derive a deterministic seed for this replay
-        replay_seed = derive_replay_seed(seed, regime)
+        replay_seed = derive_replay_seed(seed, r)
 
         # Run the replay engine
         replay_engine = TextReplayEngine(regime_config, snapshot, replay_seed)
         replayed_texts = replay_engine.run()
 
         # Store the result in the result object
-        result.replays[regime] = ReplayResult(
-            pa_regime=regime,
+        result.replays[r] = ReplayResult(
+            pa_regime=r,
             instance_texts=replayed_texts,
             seed=replay_seed,
         )
 
         # Save this regime's specific output if requested
-        if persistence_level == "full":
-            save_replay(result, run_dir, regime)
+        if persistence_level == "full" and run_dir:
+            save_replay(result, run_dir, r)
 
         # 12. Always compute and write temporary results for aggregation
         from pasim.analysis.majority_text import compute_majority_text
@@ -165,9 +181,10 @@ def run_single(params_path: str, seed: int = 20240105, persistence_level: str = 
             experiment_root=params_path_obj.parent,
             run_id=run_id,
             run_seed=seed,
-            regime=regime,
+            regime=r,
             total_manuscripts_spawned=len(snapshot.nodes),
             majority_text_segments=majority_segments,
         )
 
     return result
+

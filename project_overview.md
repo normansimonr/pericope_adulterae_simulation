@@ -125,10 +125,10 @@ print(experiment_summary)
 
 The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`. It is responsible for:
 
--   Launching N independent simulation runs concurrently using process-based parallelism.
--   Ensuring each run receives a unique, derived seed for natural RNG variability.
--   Implementing a retry mechanism for individual runs, allowing failures to be recorded and retried without halting the entire batch.
--   Collecting results from all runs (including failure records) and returning a comprehensive summary.
+-   **Deterministic Run Planning**: Before execution, it generates a complete "run plan" consisting of `RunSpec` objects (containing unique `run_id` and `seed`). This ensures that run identifiers are assigned once in the main process and remain consistent regardless of worker scheduling or execution order.
+-   **Dual-Regime Distribution**: It launches independent simulation tasks for each (run x regime) pair concurrently using process-based parallelism. Each worker receives a specific `RunSpec` and a target regime (`"insertion"` or `"omission"`).
+-   **Robust Retry Logic**: It implements a retry mechanism for individual tasks, allowing failures to be recorded and retried without halting the entire batch.
+-   **Result Collection**: It collects summaries from all workers (including failure records) and returns a comprehensive summary of the entire experiment.
 
 ### Simulation Execution Layers
 
@@ -234,7 +234,7 @@ To facilitate rigorous academic analysis and ensure full reproducibility, the `p
 The system supports two persistence levels via the `--persistence-level` CLI flag:
 
 -   **Minimal Persistence (Default)**: Optimized for high-throughput simulations. It avoids creating thousands of small files and directories. Instead, it only produces a single `results.csv` at the experiment root containing the most critical summary data for each run and regime.
--   **Full Persistence**: In addition to `results.csv`, it generates unique run directories containing every simulation artefact (genealogies, full textual states, logs). This is essential for deep inspection of specific runs but can consume significant disk space.
+-   **Full Persistence**: In addition to `results.csv`, it generates unique run directories containing every simulation artefact (genealogies, full textual states, logs). Run directories are named deterministically as `runs/run_<run_id>/` and contain separate subdirectories for each regime (e.g., `runs/run_0/insertion/`). This structure is essential for deep inspection of specific runs but can consume significant disk space.
 
 ### Parallel-Safe Aggregation
 
@@ -246,7 +246,7 @@ Since simulations run in parallel, the system uses a distributed writing strateg
 
 ### Persistent Artefacts (Full Level)
 
--   **Shared Demographic Data (Run Root)**:
+-   **Shared Demographic Data (Run Root - `runs/run_<run_id>/`)**:
     -   `config.yaml`: An exact copy of the input configuration file.
     -   `demographic_metadata.json`: High-level demographic metrics (seed, final tick, graph nodes/edges).
     -   `genealogy.json`: The complete genealogy graph structure.
@@ -254,9 +254,8 @@ Since simulations run in parallel, the system uses a distributed writing strateg
     -   `instances.json` & `manuscripts.json`: Detailed metadata for all witness instances and manuscripts.
     -   `telemetry.json` & `events.log`: Per-tick metrics and chronological event logs.
 
--   **Regime-Specific Data (Subdirectories)**:
-    -   `insertion/` and `omission/`: Subdirectories for each textual regime.
-    -   `run_metadata.json`: Regime-specific metadata, including the `pa_regime` type, PA intervention details (year, region, reputation), and the unique `replay_seed`.
+-   **Regime-Specific Data (Subdirectories - `runs/run_<run_id>/<regime>/`)**:
+    -   `run_metadata.json`: Regime-specific metadata, including the `run_id`, demographic `seed`, `pa_regime` type, PA intervention details (year, region, reputation), and the unique `replay_seed`.
     -   `instance_texts.tsv`: The complete textual content of all witness instances for that specific regime.
 
 This ensures that all simulation results are fully transparent, auditable, and ready for publication.
@@ -300,9 +299,10 @@ This core distinction—shocks that alter existing state versus environments tha
 -   **`config/`**: Manages the configuration and parameters for the simulations.
     -   `schema.py`: Defines the complete, hierarchical validation schema for all simulation parameters using `Pydantic`. This is the single source of truth for configuration.
 -   **`execution/`**: Handles the orchestration and running of simulations, forming the core of the experiment execution layer.
+    -   **`run_plan.py`**: Defines the `RunSpec` dataclass and the `generate_run_plan` function, providing the foundation for deterministic execution across parallel workers.
     -   **`orchestrator.py`**: Implements the high-level `run_experiment` function, serving as the experiment-level entrypoint. It loads experiment parameters, manages experiment metadata (`experiment_metadata.json`), invokes the parallel runner, and returns a comprehensive summary of the experiment's outcome, including retry policies and failure records.
-    -   **`parallel.py`**: Provides the `run_parallel` function for orchestrating multiple independent simulation runs concurrently. It ensures process-based parallelism, generates unique seeds for each run, implements robust retry logic with failure handling, and collects run-level results.
-    -   **`runner.py`**: Contains the `run_single` function, which is the entry point for executing a single, in-memory simulation run. It is responsible for setting up the RNG, running the core genealogy generation, and persisting the individual run's results.
+    -   **`parallel.py`**: Provides the `run_parallel` function for orchestrating multiple independent simulation runs concurrently. It uses the deterministic run plan, ensures process-based parallelism, implements robust retry logic with failure handling, and collects run-level results.
+    -   **`runner.py`**: Contains the `run_single` function, which is the entry point for executing a single, in-memory simulation run. It supports executing a specific regime and handles the deterministic directory structure for persistent output.
     -   `batch.py`: (Intended for future batch management, currently unused)
 -   **`analysis/`**: Provides tools for processing, analyzing, and visualizing simulation results.
     -   `metrics.py`: For defining and calculating simulation metrics.

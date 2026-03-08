@@ -67,8 +67,8 @@ def test_run_parallel_successful_execution(temp_parallel_experiment_folder: Path
     summary = run_parallel(str(params_path), n_runs=n_runs, max_retries=params["max_retries"])
 
     # Assert summary is correct for a successful run
-    assert summary["total_runs_attempted"] == n_runs
-    assert summary["successful_runs"] == n_runs
+    assert summary["total_runs_attempted"] == n_runs * 2
+    assert summary["successful_runs"] == n_runs * 2
     assert summary["failed_runs"] == 0
     assert len(summary["failure_records"]) == 0
 
@@ -101,11 +101,11 @@ def test_run_parallel_failure_handling(temp_parallel_experiment_folder: Path):
         summary = run_parallel(str(params_path), n_runs=n_runs, max_retries=max_retries)
 
     # Assert summary reflects the failed runs and retries
-    assert summary["total_runs_attempted"] == n_runs
+    assert summary["total_runs_attempted"] == n_runs * 2
     assert summary["successful_runs"] == 0
-    assert summary["failed_runs"] == n_runs
+    assert summary["failed_runs"] == n_runs * 2
 
-    assert len(summary["failure_records"]) == n_runs
+    assert len(summary["failure_records"]) == n_runs * 2
 
     # Check the details of one of the failure records
     first_failure = summary["failure_records"][0]
@@ -136,8 +136,8 @@ def test_run_experiment_successful_execution(temp_parallel_experiment_folder: Pa
     summary = run_experiment(str(params_path))
 
     # Assert summary is correct for a successful experiment
-    assert summary["total_runs_attempted"] == n_runs
-    assert summary["successful_runs"] == n_runs
+    assert summary["total_runs_attempted"] == n_runs * 2
+    assert summary["successful_runs"] == n_runs * 2
     assert summary["failed_runs"] == 0
     assert len(summary["failure_records"]) == 0
 
@@ -156,7 +156,7 @@ def test_run_experiment_successful_execution(temp_parallel_experiment_folder: Pa
     assert metadata["execution_status"] == "completed"
     assert metadata["start_timestamp"] is not None
     assert metadata["end_timestamp"] is not None
-    assert metadata["run_counts"]["successful"] == n_runs
+    assert metadata["run_counts"]["successful"] == n_runs * 2
     assert metadata["run_counts"]["failed"] == 0
     assert metadata["run_counts"]["retried"] == 0
     assert metadata["summary"] == summary
@@ -184,10 +184,10 @@ def test_run_experiment_failure_metadata(temp_parallel_experiment_folder: Path):
         summary = run_experiment(str(params_path))
 
     # Assert summary reflects the failed runs
-    assert summary["total_runs_attempted"] == n_runs
+    assert summary["total_runs_attempted"] == n_runs * 2
     assert summary["successful_runs"] == 0
-    assert summary["failed_runs"] == n_runs
-    assert len(summary["failure_records"]) == n_runs
+    assert summary["failed_runs"] == n_runs * 2
+    assert len(summary["failure_records"]) == n_runs * 2
 
     # Assert experiment_metadata.json exists and is correct for failures
     metadata_path = temp_parallel_experiment_folder / "experiment_metadata.json"
@@ -200,8 +200,8 @@ def test_run_experiment_failure_metadata(temp_parallel_experiment_folder: Path):
     assert metadata["start_timestamp"] is not None
     assert metadata["end_timestamp"] is not None
     assert metadata["run_counts"]["successful"] == 0
-    assert metadata["run_counts"]["failed"] == n_runs
-    assert metadata["run_counts"]["retried"] == n_runs * max_retries  # 2 runs * 1 retry
+    assert metadata["run_counts"]["failed"] == n_runs * 2
+    assert metadata["run_counts"]["retried"] == n_runs * 2 * max_retries  # 2 runs * 2 regimes * 1 retry
 
 
 def test_run_experiment_catastrophic_failure_metadata(temp_parallel_experiment_folder: Path):

@@ -82,11 +82,11 @@ def test_full_persistence(experiment_dir):
 
     assert (experiment_dir / "results.csv").exists()
     assert (experiment_dir / "runs").exists()
-    assert (experiment_dir / "runs" / "1").exists()
-    assert (experiment_dir / "runs" / "2").exists()
+    assert (experiment_dir / "runs" / "run_0").exists()
+    assert (experiment_dir / "runs" / "run_1").exists()
 
-    # Verify some artefact in run 1
-    assert (experiment_dir / "runs" / "1" / "genealogy.json").exists()
+    # Verify some artefact in run 0
+    assert (experiment_dir / "runs" / "run_0" / "genealogy.json").exists()
 
 
 def test_majority_text_string_serialization():
@@ -143,11 +143,11 @@ def test_parallel_aggregation_determinism(experiment_dir):
         rows = list(reader)
 
     # Sorted by run_id, then regime
-    assert rows[0]["run_id"] == "1"
+    assert rows[0]["run_id"] == "0"
     assert rows[0]["regime"] == "insertion"
-    assert rows[1]["run_id"] == "1"
+    assert rows[1]["run_id"] == "0"
     assert rows[1]["regime"] == "omission"
-    assert rows[2]["run_id"] == "2"
+    assert rows[2]["run_id"] == "1"
     assert rows[2]["regime"] == "insertion"
-    assert rows[3]["run_id"] == "2"
+    assert rows[3]["run_id"] == "1"
     assert rows[3]["regime"] == "omission"

@@ -140,6 +140,8 @@ def _save_regime_metadata(regime_dir: Path, result: "SimulationResult", regime_n
     replay = result.replays[regime_name]
 
     metadata = {
+        "run_id": result.run_id,
+        "seed": result.seed,
         "pa_regime": replay.pa_regime,
         "pa_intervention_year": result.config.pa_intervention_year,
         "pa_intervention_region": result.config.pa_intervention_region,
