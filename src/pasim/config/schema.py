@@ -137,7 +137,7 @@ class SimulationConfig(BaseModel):
     script_transitions: List[ScriptTransitionConfig] = []
     demand_schedule: DemandScheduleConfig
     log_tick_frequency: int = Field(1, ge=1)
-    validation_frequency: int = Field(0, ge=0)  # 0 means disabled, N means every N ticks
+    validation_frequency: int = Field(10, ge=0)  # 0 means disabled, N means every N ticks
 
     # PA Regime Configuration
     pa_regime: Literal["insertion", "omission"]
