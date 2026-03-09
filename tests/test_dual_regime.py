@@ -52,8 +52,8 @@ def test_dual_regime_structure(temp_experiment_dir: Path):
 
     run_single(str(params_path), seed=seed)
 
-    # Check that the run directory was created (should be '1')
-    run_dir = temp_experiment_dir / "runs" / "1"
+    # Check that the run directory was created (should be 'run_0')
+    run_dir = temp_experiment_dir / "runs" / "run_0"
     assert run_dir.exists()
 
     # Check for shared files in the run root

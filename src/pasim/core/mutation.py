@@ -17,8 +17,9 @@ random number generator). It relies on the `tagged_string_constraints` module to
 ensure that all mutations result in a valid textual state.
 """
 
-import numpy as np
 from typing import Optional
+
+import numpy as np
 from numpy.typing import NDArray
 
 from pasim.config.schema import SimulationConfig
@@ -82,19 +83,21 @@ def mutate_tagged_string(
     if expected_proportion == 0.0:
         return tagged_string.copy()
 
-    # Calculate the target number of segments to mutate
-    n_mutations = int(round(expected_proportion * config.text_length))
-
-    if n_mutations == 0:
-        return tagged_string.copy()
-
     # Identify indices that can be mutated
     if immutable_mask is not None:
         mutable_indices = np.where(~immutable_mask)[0]
     else:
         mutable_indices = np.arange(config.text_length)
 
-    # Adjust n_mutations if it exceeds available mutable indices
+    # Calculate the target number of segments to mutate based on the MUTABLE part of the string.
+    # This ensures that the configured error rate applies specifically to segments the scribe
+    # can actually change, avoiding an unintended "acceleration" of the value 0 sink.
+    n_mutations = int(round(expected_proportion * len(mutable_indices)))
+
+    if n_mutations == 0:
+        return tagged_string.copy()
+
+    # Adjust n_mutations if it exceeds available mutable indices (safety)
     n_to_mutate = min(n_mutations, len(mutable_indices))
 
     if n_to_mutate == 0:

@@ -48,8 +48,8 @@ def test_empty_survivor_case():
 
 
 BASE_CONFIG = """
-total_ticks: 1000
-text_length: 10
+total_ticks: 800
+text_length: 50
 p_region_migration: 0.1
 p_internal_relocation: 0.1
 reputation_distribution:
@@ -59,7 +59,7 @@ reputation_distribution:
   4: 0.2
   5: 0.2
 pa_regime: insertion
-pa_intervention_year: 300
+pa_intervention_year: 700
 pa_intervention_region: "Asia Minor"
 pa_innovator_reputation: 5.0
 persecutions: []
@@ -72,9 +72,9 @@ script_transitions:
     distribution:
       uncial: 1.0
 demand_schedule:
-  1: 120
-  300: 600
-  700: 1200
+  1: 50
+  300: 100
+  700: 200
 """
 
 
@@ -91,7 +91,7 @@ def majority_config_path(tmp_path, monkeypatch):
 def test_cross_regime_independence(majority_config_path):
     """Confirm both produce majority files and that values may differ (or at least exist)."""
     result = run_single(majority_config_path, seed=42)
-    run_dir = Path("experiments/runs/1")
+    run_dir = Path("experiments/runs/run_0")
 
     for regime in ["insertion", "omission"]:
         majority_path = run_dir / regime / "majority_text.json"
@@ -113,11 +113,11 @@ def test_cross_regime_independence(majority_config_path):
 def test_majority_text_determinism(majority_config_path):
     """Run same experiment twice with identical seed. Assert identical majority_text.json."""
     run_single(majority_config_path, seed=123)
-    run_dir1 = Path("experiments/runs/1")
+    run_dir1 = Path("experiments/runs/run_0")
 
     # Clear runs or expect run 2
     run_single(majority_config_path, seed=123)
-    run_dir2 = Path("experiments/runs/2")
+    run_dir2 = Path("experiments/runs/run_1")
 
     for regime in ["insertion", "omission"]:
         with open(run_dir1 / regime / "majority_text.json", "r") as f:
@@ -141,7 +141,7 @@ def test_empty_survivor_persistence(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     run_single("experiments/empty_params.yaml", seed=999)
-    run_dir = Path("experiments/runs/1")
+    run_dir = Path("experiments/runs/run_0")
 
     for regime in ["insertion", "omission"]:
         majority_path = run_dir / regime / "majority_text.json"

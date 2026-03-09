@@ -116,9 +116,14 @@ def run_single(
     # 8. Resolve run directory and ID
     params_path_obj = Path(params_path)
     if run_id is None:
-        # Fallback to old dynamic resolution if run_id not provided
+        # Fallback to dynamic resolution if run_id not provided
         run_dir = resolve_run_directory(params_path_obj, create_dir=(persistence_level == "full"))
-        run_id = int(run_dir.name)
+        # Parse the ID from the 'run_N' folder name
+        try:
+            run_id = int(run_dir.name[4:])
+        except (ValueError, IndexError):
+            # Fallback for old directory names or errors
+            run_id = 1
     else:
         # Use deterministic run_id-based folder if full persistence
         if persistence_level == "full":
@@ -187,4 +192,3 @@ def run_single(
         )
 
     return result
-

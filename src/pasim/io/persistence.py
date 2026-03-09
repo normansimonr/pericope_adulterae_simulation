@@ -77,17 +77,17 @@ def resolve_run_directory(params_path: Path, create_dir: bool = True) -> Path:
         existing_run_numbers = []
         if runs_dir.is_dir():
             for item in runs_dir.iterdir():
-                if item.is_dir():
+                if item.is_dir() and item.name.startswith("run_"):
                     try:
-                        existing_run_numbers.append(int(item.name))
+                        existing_run_numbers.append(int(item.name[4:]))
                     except ValueError:
-                        continue  # Ignore non-integer named directories
+                        continue  # Ignore malformed directories
 
-        next_run_number = 1
+        next_run_number = 0
         if existing_run_numbers:
             next_run_number = max(existing_run_numbers) + 1
 
-        run_dir = runs_dir / str(next_run_number)
+        run_dir = runs_dir / f"run_{next_run_number}"
 
         if not create_dir:
             return run_dir

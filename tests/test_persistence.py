@@ -67,8 +67,8 @@ def run_simulation_and_get_paths(temp_experiment_folder: Path, request):
     result = run_single(str(params_path), seed=seed)
 
     # Construct the expected run directory path. Since each test gets a fresh
-    # temp_experiment_folder, the first run in that folder will always be '1'.
-    run_dir = temp_experiment_folder / "runs" / "1"
+    # temp_experiment_folder, the first run in that folder will always be 'run_0'.
+    run_dir = temp_experiment_folder / "runs" / "run_0"
 
     return result, run_dir, seed
 
@@ -78,15 +78,15 @@ class TestPersistence:
     def test_run_directory_creation_and_numbering(self, temp_experiment_folder: Path):
         # First run
         run_single(str(temp_experiment_folder / "params.yaml"), seed=1)
-        assert (temp_experiment_folder / "runs" / "1").is_dir()
+        assert (temp_experiment_folder / "runs" / "run_0").is_dir()
 
         # Second run
         run_single(str(temp_experiment_folder / "params.yaml"), seed=2)
-        assert (temp_experiment_folder / "runs" / "2").is_dir()
+        assert (temp_experiment_folder / "runs" / "run_1").is_dir()
 
         # Third run
         run_single(str(temp_experiment_folder / "params.yaml"), seed=3)
-        assert (temp_experiment_folder / "runs" / "3").is_dir()
+        assert (temp_experiment_folder / "runs" / "run_2").is_dir()
 
     # --- 3. Test: All Files Exist ---
 
@@ -365,7 +365,7 @@ class TestPersistence:
         params_file.write_text(self._get_params_with_persecution())
 
         result = run_single(str(params_file), seed=10)  # Use a different seed
-        run_dir = temp_experiment_folder / "runs" / "1"  # Derive run_dir from temp_experiment_folder
+        run_dir = temp_experiment_folder / "runs" / "run_0"  # Derive run_dir from temp_experiment_folder
 
         with open(run_dir / "events.log", "r") as f:
             events_log_content = f.read()

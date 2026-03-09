@@ -135,6 +135,7 @@ The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`.
 To ensure realistic scribal behavior, the mutation system enforces a specific restriction on segments representing textual absence (value `0`):
 
 -   **Single-Parent Rule**: If a manuscript is produced from exactly one parent exemplar, any segment inherited as `0` is considered **immutable**. The scribe cannot "mutate" a passage into existence if it was not present in the source. In this scenario, `0` always transitions to `0`.
+-   **Mutation Count Calculation**: When the Single-Parent Rule is active, the target number of mutations (derived from the `expected_proportion`) is calculated based only on the **mutable** segments (those with non-zero values). This ensures that the configured error rate applies specifically to the text the scribe can actually change, preventing an unintended "acceleration" of the value 0 sink.
 -   **Multi-Parent Rule**: When a manuscript is produced via contamination (multi-parent transmission), the existing mutation probabilities apply to all segments, including those resolved as `0`. This allows for the possibility of segments being introduced during the more complex process of resolving multiple sources.
 -   **Non-Zero Segments**: Segments with non-zero values (existing readings) continue to follow standard mutation behavior regardless of the number of parents.
 
@@ -244,7 +245,7 @@ To facilitate rigorous academic analysis and ensure full reproducibility, the `p
 The system supports two persistence levels via the `--persistence-level` CLI flag:
 
 -   **Minimal Persistence (Default)**: Optimized for high-throughput simulations. It avoids creating thousands of small files and directories. Instead, it only produces a single `results.csv` at the experiment root containing the most critical summary data for each run and regime.
--   **Full Persistence**: In addition to `results.csv`, it generates unique run directories containing every simulation artefact (genealogies, full textual states, logs). Run directories are named deterministically as `runs/run_<run_id>/` and contain separate subdirectories for each regime (e.g., `runs/run_0/insertion/`). This structure is essential for deep inspection of specific runs but can consume significant disk space.
+-   **Full Persistence**: In addition to `results.csv`, it generates unique run directories containing every simulation artefact (genealogies, full textual states, logs). Run directories are named deterministically as `runs/run_<run_id>/` (starting from `run_0`) and contain separate subdirectories for each regime (e.g., `runs/run_0/insertion/`). This structure is essential for deep inspection of specific runs but can consume significant disk space.
 
 ### Parallel-Safe Aggregation
 

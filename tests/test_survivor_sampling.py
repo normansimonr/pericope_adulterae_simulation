@@ -102,9 +102,9 @@ def test_persistence_filtering(sampling_config_path, tmp_path):
     # experiment_dir = params_path.parent -> "experiments"
     # runs_dir = experiment_dir / "runs" -> "experiments/runs"
     runs_dir = Path("experiments/runs")
-    run_nums = [int(d.name) for d in runs_dir.iterdir() if d.is_dir() and d.name.isdigit()]
+    run_nums = [int(d.name[4:]) for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith("run_")]
     latest_run = max(run_nums)
-    run_dir = runs_dir / str(latest_run)
+    run_dir = runs_dir / f"run_{latest_run}"
 
     survivor_ids = set(res.survivor_sampling_result.sampled_witness_ids)
 
