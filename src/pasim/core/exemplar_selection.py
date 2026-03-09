@@ -48,7 +48,8 @@ def select_exemplars(
     graph: GenealogyGraph,
     manuscript_to_instance_map: Dict[str, WitnessInstanceID],
     rng: RNG,
-    kdtree: Optional[KDTree] = None,  # New optional argument
+    kdtree: Optional[KDTree] = None,
+    reputation_cache: Optional[Dict[WitnessInstanceID, float]] = None,
 ) -> List[WitnessInstanceID]:
     """
     Selects parent exemplars for a new manuscript.
@@ -62,6 +63,7 @@ def select_exemplars(
                                     corresponding witness instance IDs in the graph.
         rng: The seeded random number generator.
         kdtree: An optional pre-built KDTree for the `alive_manuscripts_in_region`.
+        reputation_cache: An optional dictionary mapping instance IDs to reputations.
 
     Returns:
         A list of witness instance IDs chosen as exemplars.
@@ -91,7 +93,10 @@ def select_exemplars(
     candidate_instances = [manuscript_to_instance_map[ms.manuscript_id] for ms in closest_manuscripts]
 
     # 3. Reputation-based Ranking
-    candidate_instances.sort(key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True)
+    if reputation_cache is not None:
+        candidate_instances.sort(key=lambda inst_id: reputation_cache[inst_id], reverse=True)
+    else:
+        candidate_instances.sort(key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True)
 
     # 4. Determine number of exemplars
     n = rng.choice([1, 2, 3], p=[0.8, 0.1, 0.1])

@@ -119,12 +119,18 @@ class PersecutionEvent(HistoricalEvent):
         if self.kill_proportion == 0.0:
             return
 
-        # 1. Identify eligible manuscripts
+        # 1. Identify eligible manuscripts using the pre-maintained alive_by_region
         eligible_manuscript_ids = []
-        for ms_id in state.alive_manuscripts:
-            ms_obj = state.registries.manuscripts.get(ms_id)
-            if self.regions is None or ms_obj.region.value in self.regions:
-                eligible_manuscript_ids.append(ms_id)
+        if self.regions is None:
+            # Global persecution
+            eligible_manuscript_ids = list(state.alive_manuscripts)
+        else:
+            # Regional persecution
+            from .state import Region
+
+            for region_name in self.regions:
+                region_enum = Region(region_name)
+                eligible_manuscript_ids.extend(list(state.alive_by_region[region_enum]))
 
         if not eligible_manuscript_ids:
             return
@@ -135,14 +141,16 @@ class PersecutionEvent(HistoricalEvent):
             return
 
         # 3. Randomly choose victims (IDs)
-        eligible_array = np.array(list(eligible_manuscript_ids), dtype=object)
-        victims_ids = rng.choice(eligible_array, size=n_to_destroy, replace=False)
+        victims_ids = rng.choice(eligible_manuscript_ids, size=n_to_destroy, replace=False).tolist()
 
         # 4. Kill them (remove from alive set and set death_tick/reason)
         for victim_id in victims_ids:
             victim_manuscript = state.registries.manuscripts.get(victim_id)
             victim_manuscript.death_tick = state.tick  # Set death_tick to current tick
             victim_manuscript.death_reason = DeathReason.PERSECUTION  # Set explicit reason
+            # Update alive_by_region mapping
+            state.alive_by_region[victim_manuscript.region].remove(victim_id)
+
         state.alive_manuscripts.difference_update(victims_ids)
 
 

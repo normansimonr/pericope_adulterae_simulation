@@ -95,7 +95,6 @@ def add_root_node(
         birth_tick=birth_tick,
         reputation=reputation,
     )
-    validate_genealogy_full(graph)
 
 
 def add_child_node(
@@ -147,7 +146,7 @@ def add_child_node(
         if not graph.has_node(parent_id):
             raise ValueError(f"Parent node with ID '{parent_id}' does not exist.")
 
-    # Add the node and edges, then validate.
+    # Add the node and edges
     graph.add_node(
         node_id,
         witness_id=witness_id,
@@ -157,13 +156,6 @@ def add_child_node(
     )
     edges = [(parent_id, node_id) for parent_id in parent_node_ids]
     graph.add_edges_from(edges)
-    # Validate attributes of the newly added node
-    required_attrs = {"witness_id", "manuscript_id", "birth_tick", "reputation"}
-    node_attrs = graph.nodes[node_id]
-    missing_attrs = required_attrs - set(node_attrs.keys())
-    if missing_attrs:
-        graph.remove_node(node_id)  # Revert changes
-        raise GenealogyValidationError(f"Node '{node_id}' is missing required attributes: {missing_attrs}")
 
 
 def _validate_genealogy_attributes(graph: GenealogyGraph) -> None:

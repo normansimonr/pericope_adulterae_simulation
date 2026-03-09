@@ -80,7 +80,8 @@ def validate_tagged_string(tagged_string: NDArray[np.int16], config: SimulationC
     if not np.issubdtype(tagged_string.dtype, np.integer):
         raise ValueError(f"Tagged string dtype must be an integer type, but got {tagged_string.dtype}.")
 
-    if not np.all(np.isin(tagged_string, LEGAL_SEGMENT_VALUES)):
+    # Faster check than np.isin for contiguous values
+    if not (np.all(tagged_string >= 0) and np.all(tagged_string <= 5)):
         raise ValueError("Tagged string contains illegal segment values.")
 
 

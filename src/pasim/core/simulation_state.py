@@ -12,7 +12,7 @@ from typing import Any, Dict
 import networkx as nx
 
 from pasim.core.genealogy import create_empty_genealogy
-from pasim.core.state import StateRegistry
+from pasim.core.state import Region, StateRegistry
 
 
 @dataclass
@@ -29,7 +29,11 @@ class GenerationState:
     graph: nx.DiGraph
     registries: StateRegistry
     alive_manuscripts: set[str]
+    # Maps each region to the set of manuscript IDs currently alive in that region
+    alive_by_region: Dict[Region, set[str]] = field(default_factory=lambda: {r: set() for r in Region})
     manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
+    # Cache for instance reputations to avoid graph lookups during exemplar selection
+    instance_reputations: Dict[str, float] = field(default_factory=dict)
     # Counters for generating unique IDs
     manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
     witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))

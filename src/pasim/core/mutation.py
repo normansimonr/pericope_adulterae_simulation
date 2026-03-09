@@ -24,7 +24,7 @@ from numpy.typing import NDArray
 
 from pasim.config.schema import SimulationConfig
 
-from .tagged_string_constraints import LEGAL_SEGMENT_VALUES, validate_tagged_string
+from .tagged_string_constraints import LEGAL_SEGMENT_VALUES
 
 
 def mutate_tagged_string(
@@ -125,23 +125,18 @@ def mutate_tagged_string(
 
     # If some elements picked the same value as their current value, we need to pick
     # a different value. To remain deterministic and vectorized, we shift to the
-    # "next" value in the sorted alphabet.
+    # "next" value in the contiguous alphabet [0, 5].
     if np.any(mask_resample):
-        alphabet_size = len(LEGAL_SEGMENT_VALUES)
-        # Find the index of each current value in the sorted alphabet.
-        # np.searchsorted is efficient for this.
-        indices_in_alphabet = np.searchsorted(LEGAL_SEGMENT_VALUES, current_values_at_indices[mask_resample])
-
-        # Shift the index by 1 (wrapping around) to guarantee a different value.
-        new_alphabet_indices = (indices_in_alphabet + 1) % alphabet_size
-
-        # Map back to the actual legal values.
-        new_values[mask_resample] = LEGAL_SEGMENT_VALUES[new_alphabet_indices]
+        # Shift the value by 1 (wrapping around 6) to guarantee a different value.
+        # This is safe because our alphabet is [0, 1, 2, 3, 4, 5].
+        new_values[mask_resample] = (current_values_at_indices[mask_resample] + 1) % 6
 
     # Apply the new values to the `new_string` at the `indices_to_mutate`
     new_string[indices_to_mutate] = new_values
 
     # Final safety check to ensure the output is valid
-    validate_tagged_string(new_string, config)
+    # validate_tagged_string is omitted here for performance in production
+    # but can be re-enabled for debugging.
+    # validate_tagged_string(new_string, config)
 
     return new_string

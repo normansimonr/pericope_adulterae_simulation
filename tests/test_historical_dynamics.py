@@ -71,6 +71,9 @@ def _create_initial_state(
             state.registries.manuscripts.add(manuscript)
             state.registries.witnesses.add(witness)
             state.alive_manuscripts.add(manuscript.manuscript_id)
+            state.alive_by_region[region].add(manuscript.manuscript_id)
+
+            reputation = int(rng.integers(1, 6))
 
             if state.graph.number_of_nodes() == 0:
                 add_root_node(
@@ -79,7 +82,7 @@ def _create_initial_state(
                     witness_id=witness_id,
                     manuscript_id=manuscript_id,
                     birth_tick=start_tick,
-                    reputation=int(rng.integers(1, 6)),
+                    reputation=reputation,
                 )
             else:
                 # For subsequent manuscripts, add as child nodes of the initial root
@@ -91,11 +94,12 @@ def _create_initial_state(
                     witness_id=witness_id,
                     manuscript_id=manuscript_id,
                     birth_tick=start_tick,
-                    reputation=int(rng.integers(1, 6)),
+                    reputation=reputation,
                 )
                 state.graph.add_edge(root_node_id, instance_id)  # Link to the root
 
             state.manuscript_to_instance_map[manuscript.manuscript_id] = instance_id
+            state.instance_reputations[instance_id] = reputation
 
             # Create and store initial text for the new instance
             initial_text = make_initial_text(config)
@@ -479,13 +483,13 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
     event1 = {
         "event_type": "persecution",
         "start_tick": 5,
-        "regions": ["EGYPT"],
+        "regions": ["Egypt"],
         "kill_proportion": 0.2,
     }
     event2 = {
         "event_type": "persecution",
         "start_tick": 2,
-        "regions": ["EGYPT"],
+        "regions": ["Egypt"],
         "kill_proportion": 0.5,
     }
 

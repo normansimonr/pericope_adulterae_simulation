@@ -58,7 +58,7 @@ class MaterialTransitionManager:
             # If no schedule is provided, material assignment should fall back
             # to some default or be explicitly configured for a single choice.
             # For now, we raise an error to ensure configuration.
-            raise ValueError("Material transition schedule cannot be empty. " "Provide at least one entry, e.g., for start_tick 0.")
+            raise ValueError("Material transition schedule cannot be empty. Provide at least one entry, e.g., for start_tick 0.")
 
         # Sort the schedule by start_tick to ensure correct lookup
         self._schedule = sorted(schedule_configs, key=lambda x: x["start_tick"])
@@ -98,16 +98,15 @@ class MaterialTransitionManager:
                 "probabilities": probabilities_list,
             })
 
-    def get_material_for_tick(self, tick: int, rng: np.random.Generator) -> Material:
+    def get_active_distribution(self, tick: int) -> Dict[str, Any]:
         """
-        Samples a material based on the active distribution for the given tick.
+        Returns the active material distribution for a given tick.
 
         Args:
             tick: The current simulation tick.
-            rng: The NumPy random number generator for deterministic sampling.
 
         Returns:
-            Material: The sampled material.
+            Dict[str, Any]: A dictionary containing 'materials' and 'probabilities'.
         """
         active_distribution = None
         # Iterate backwards to find the most recent start_tick <= current tick
@@ -123,5 +122,19 @@ class MaterialTransitionManager:
                 "Ensure a distribution with start_tick <= current_tick is always provided."
             )
 
+        return active_distribution
+
+    def get_material_for_tick(self, tick: int, rng: np.random.Generator) -> Material:
+        """
+        Samples a material based on the active distribution for the given tick.
+
+        Args:
+            tick: The current simulation tick.
+            rng: The NumPy random number generator for deterministic sampling.
+
+        Returns:
+            Material: The sampled material.
+        """
+        active_distribution = self.get_active_distribution(tick)
         sampled_material = rng.choice(a=active_distribution["materials"], p=active_distribution["probabilities"])
         return sampled_material

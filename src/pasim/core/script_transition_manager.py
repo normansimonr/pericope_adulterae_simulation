@@ -89,6 +89,27 @@ class ScriptTransitionManager:
                 "probabilities": probabilities_list,
             })
 
+    def get_active_distribution(self, tick: int) -> Dict[str, Any]:
+        """
+        Returns the active script distribution for a given tick.
+
+        Args:
+            tick: The current simulation tick.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing 'scripts' and 'probabilities'.
+        """
+        active_distribution = None
+        for entry in reversed(self._processed_schedule):
+            if tick >= entry["start_tick"]:
+                active_distribution = entry
+                break
+
+        if active_distribution is None:
+            raise RuntimeError(f"No active script distribution found for tick {tick}.")
+
+        return active_distribution
+
     def get_script_for_tick(self, tick: int, rng: np.random.Generator) -> Script:
         """
         Samples a script based on the active distribution for the given tick.
@@ -100,14 +121,6 @@ class ScriptTransitionManager:
         Returns:
             Script: The sampled script.
         """
-        active_distribution = None
-        for entry in reversed(self._processed_schedule):
-            if tick >= entry["start_tick"]:
-                active_distribution = entry
-                break
-
-        if active_distribution is None:
-            raise RuntimeError(f"No active script distribution found for tick {tick}.")
-
+        active_distribution = self.get_active_distribution(tick)
         sampled_script = rng.choice(a=active_distribution["scripts"], p=active_distribution["probabilities"])
         return sampled_script

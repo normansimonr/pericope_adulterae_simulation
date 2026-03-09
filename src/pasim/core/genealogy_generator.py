@@ -44,7 +44,7 @@ Explicit Exclusions:
 import logging
 import time
 from math import ceil
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 from numpy.random import Generator as RNG
@@ -55,12 +55,10 @@ from pasim.core.exemplar_selection import select_exemplars
 from pasim.core.genealogy import add_child_node, add_root_node, validate_genealogy_full
 from pasim.core.genealogy_snapshot import GenealogyNode, GenealogySnapshot
 from pasim.core.historical_events import HistoricalEventManager
-from pasim.core.lifespan import sample_lifespan
 from pasim.core.material_transition_manager import MaterialTransitionManager
-from pasim.core.reputation import sample_reputation
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
-from pasim.core.spatial import generate_random_coordinates
+from pasim.core.spatial import REGION_BOUNDS, generate_random_coordinates
 from pasim.core.state import DeathReason, Manuscript, Region, Witness
 
 logger = logging.getLogger(__name__)
@@ -153,6 +151,8 @@ def handle_deaths(state: GenerationState) -> GenerationState:
             # specific event (like persecution) in the same tick.
             if manuscript.death_reason is None:
                 manuscript.death_reason = DeathReason.NATURAL
+            # Update alive_by_region mapping
+            state.alive_by_region[manuscript.region].remove(ms_id)
         state.alive_manuscripts -= dead_manuscripts
 
     return state
@@ -162,7 +162,7 @@ def handle_migration(
     state: GenerationState,
     rng: RNG,
     p_region_migration: float,
-    p_internal_relocation: Optional[float] = None,
+    p_internal_relocation: float = 0.0,
 ) -> GenerationState:
     """Handles the migration of manuscripts between and within regions.
 
@@ -182,23 +182,40 @@ def handle_migration(
     Returns:
         The updated simulation state.
     """
-    # Iterate over a copy as the underlying registry objects will be modified
-    for ms_id in list(state.alive_manuscripts):
-        manuscript = state.registries.manuscripts.get(ms_id)
+    n_alive = len(state.alive_manuscripts)
+    if n_alive == 0:
+        return state
 
-        # 1. Check for region migration
-        if rng.random() < p_region_migration:
-            other_regions = [r for r in Region if r != manuscript.region]
+    alive_list = list(state.alive_manuscripts)
+
+    # 1. Identify which manuscripts migrate between regions
+    n_migrate = rng.binomial(n_alive, p_region_migration)
+    migrating_ids = []
+    if n_migrate > 0:
+        migrating_ids = rng.choice(alive_list, size=n_migrate, replace=False).tolist()
+        for ms_id in migrating_ids:
+            manuscript = state.registries.manuscripts.get(ms_id)
+            old_region = manuscript.region
+            other_regions = [r for r in Region if r != old_region]
             if other_regions:
-                new_region_value = rng.choice([r.value for r in other_regions])
-                new_region = Region(new_region_value)  # Convert back to Enum
+                new_region = rng.choice(other_regions)
                 manuscript.region = new_region
                 manuscript.location = generate_random_coordinates(new_region, rng)
-            continue  # A manuscript can only have one migration event per tick
 
-        # 2. Check for internal relocation
-        if p_internal_relocation and rng.random() < p_internal_relocation:
-            manuscript.location = generate_random_coordinates(manuscript.region, rng)
+                # Update alive_by_region mapping
+                state.alive_by_region[old_region].remove(ms_id)
+                state.alive_by_region[new_region].add(ms_id)
+
+    # 2. Identify which manuscripts relocate internally
+    # (only for those that didn't migrate regions)
+    if p_internal_relocation > 0:
+        remaining_ids = list(state.alive_manuscripts - set(migrating_ids))
+        n_relocate = rng.binomial(len(remaining_ids), p_internal_relocation)
+        if n_relocate > 0:
+            relocating_ids = rng.choice(remaining_ids, size=n_relocate, replace=False).tolist()
+            for ms_id in relocating_ids:
+                manuscript = state.registries.manuscripts.get(ms_id)
+                manuscript.location = generate_random_coordinates(manuscript.region, rng)
 
     return state
 
@@ -231,7 +248,6 @@ def _spawn_new_manuscripts_from_demand(
     Args:
         state: The current simulation state.
         demand_today: A dictionary defining regional demand for the current tick.
-        death_ticks: A queue of pre-calculated death ticks for new manuscripts.
         params: The validated simulation configuration object.
         rng: The random number generator.
         material_transition_manager: The manager for time-dependent material probabilities.
@@ -244,40 +260,62 @@ def _spawn_new_manuscripts_from_demand(
     if not demand_today:
         return state
 
-    # Count alive manuscripts per region
-    stock = {region: 0 for region in Region}
-    # Also collect them for the exemplar selection step
-    alive_by_region: Dict[Region, List[Manuscript]] = {region: [] for region in Region}
-    for ms_id in state.alive_manuscripts:
-        manuscript = state.registries.manuscripts.get(ms_id)
-        stock[manuscript.region] += 1
-        alive_by_region[manuscript.region].append(manuscript)
-
     # Pre-build KDTrees for each region with alive manuscripts, once per tick
+    # Use the pre-maintained alive_by_region sets for performance
     kdtree_by_region: Dict[Region, KDTree] = {}
-    for region, alive_manuscripts_list in alive_by_region.items():
-        if alive_manuscripts_list:
+    alive_by_region_objects: Dict[Region, List[Manuscript]] = {}
+
+    for region, ms_ids in state.alive_by_region.items():
+        if ms_ids:
+            alive_manuscripts_list = [state.registries.manuscripts.get(ms_id) for ms_id in ms_ids]
+            alive_by_region_objects[region] = alive_manuscripts_list
             locations = np.array([ms.location for ms in alive_manuscripts_list])
             kdtree_by_region[region] = KDTree(locations)
 
     # Evaluate demand and spawn
     for region, demanded_count in demand_today.items():
-        stock_count = stock.get(region, 0)
-        if demanded_count > stock_count:
+        stock_count = len(state.alive_by_region[region])
+        n_to_spawn = demanded_count - stock_count
+        if n_to_spawn > 0:
             # Get the pre-built KDTree for the current region, if available
             region_kdtree = kdtree_by_region.get(region)
+
+            # Vectorized generation for this batch
+            x_bounds, y_bounds = REGION_BOUNDS[region]
+            locations_x = rng.uniform(x_bounds[0], x_bounds[1], size=n_to_spawn)
+            locations_y = rng.uniform(y_bounds[0], y_bounds[1], size=n_to_spawn)
+
+            reputation_scores = list(params.reputation_distribution.keys())
+            reputation_probs = list(params.reputation_distribution.values())
+            batch_reputations = rng.choice(reputation_scores, p=reputation_probs, size=n_to_spawn)
+
+            material_dist = material_transition_manager.get_active_distribution(current_tick)
+            batch_materials = rng.choice(material_dist["materials"], p=material_dist["probabilities"], size=n_to_spawn)
+
+            script_dist = script_transition_manager.get_active_distribution(current_tick)
+            batch_scripts = rng.choice(script_dist["scripts"], p=script_dist["probabilities"], size=n_to_spawn)
+
+            # Vectorized lifespan generation
+            batch_lifespans = np.zeros(n_to_spawn, dtype=int)
+            for mat in material_dist["materials"]:
+                mask = batch_materials == mat
+                if np.any(mask):
+                    from .lifespan import _get_lognormal_params
+
+                    mu, sigma = _get_lognormal_params(mat, region)
+                    lifespans = rng.lognormal(mean=mu, sigma=sigma, size=np.sum(mask))
+                    batch_lifespans[mask] = np.maximum(1, np.floor(lifespans)).astype(int)
+
             # Spawn new manuscripts
-            for _ in range(demanded_count - stock_count):
+            for i in range(n_to_spawn):
                 # 1. Create Manuscript
                 manuscript_id = f"M{next(state.manuscript_id_counter)}"
-                location = generate_random_coordinates(region, rng)
-                reputation = sample_reputation(rng, params.reputation_distribution)
+                location = (locations_x[i], locations_y[i])
+                reputation = int(batch_reputations[i])
+                material = batch_materials[i]
 
-                material = material_transition_manager.get_material_for_tick(current_tick, rng)
-
-                # Probabilistically determine lifespan and death tick
-                lifespan = sample_lifespan(material=material, region=region, rng=rng)
-                death_tick = current_tick + lifespan
+                # Death tick calculation using vectorized lifespans
+                death_tick = current_tick + batch_lifespans[i]
 
                 manuscript = Manuscript(
                     manuscript_id=manuscript_id,
@@ -292,17 +330,18 @@ def _spawn_new_manuscripts_from_demand(
                 # 2. Select Exemplars
                 exemplars = select_exemplars(
                     new_manuscript=manuscript,
-                    alive_manuscripts_in_region=alive_by_region[region],
+                    alive_manuscripts_in_region=alive_by_region_objects.get(region, []),
                     graph=state.graph,
                     manuscript_to_instance_map=state.manuscript_to_instance_map,
                     rng=rng,
                     kdtree=region_kdtree,  # Pass the pre-built KDTree
+                    reputation_cache=state.instance_reputations,
                 )
 
                 # 3. Create Witness and WitnessInstance (Graph Node)
                 witness_id = f"W{next(state.witness_id_counter)}"
                 instance_id = f"I{next(state.witness_instance_id_counter)}"
-                script = script_transition_manager.get_script_for_tick(current_tick, rng)
+                script = batch_scripts[i]
                 witness = Witness(
                     witness_id=witness_id,
                     manuscript_id=manuscript_id,
@@ -369,7 +408,9 @@ def _spawn_new_manuscripts_from_demand(
 
                 # 4. Update state
                 state.alive_manuscripts.add(manuscript_id)
+                state.alive_by_region[region].add(manuscript_id)
                 state.manuscript_to_instance_map[manuscript_id] = instance_id
+                state.instance_reputations[instance_id] = reputation
 
     return state
 

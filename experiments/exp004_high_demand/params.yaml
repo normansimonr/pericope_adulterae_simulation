@@ -1,0 +1,35 @@
+total_ticks: 500
+text_length: 500
+p_region_migration: 0.05
+p_internal_relocation: 0.1
+reputation_distribution:
+  1: 0.1
+  2: 0.2
+  3: 0.4
+  4: 0.2
+  5: 0.1
+pa_regime: "insertion"
+pa_intervention_year: 100
+pa_intervention_region: "Asia Minor"
+pa_innovator_reputation: 5.0
+persecutions: []
+material_transitions:
+- start_tick: 0
+  distribution:
+    papyrus: 1.0
+    parchment: 0.0
+    paper: 0.0
+script_transitions:
+- start_tick: 0
+  distribution:
+    uncial: 1.0
+    minuscule: 0.0
+demand_schedule:
+  1: 10
+  50: 100
+  100: 300
+  200: 600
+  300: 1000
+  400: 2000
+log_tick_frequency: 100
+persistence_level: "minimal"
