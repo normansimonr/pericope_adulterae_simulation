@@ -134,9 +134,4 @@ def mutate_tagged_string(
     # Apply the new values to the `new_string` at the `indices_to_mutate`
     new_string[indices_to_mutate] = new_values
 
-    # Final safety check to ensure the output is valid
-    # validate_tagged_string is omitted here for performance in production
-    # but can be re-enabled for debugging.
-    # validate_tagged_string(new_string, config)
-
     return new_string
