@@ -89,12 +89,17 @@ def apply_scribal_rule(
     proportion = expected_mutation_proportion(reputation, mutation_mapping)
 
     # Stage 3: Mutation
-    # RULE: If a manuscript has exactly one parent and the inherited reading for
-    # a segment is 0, then mutation must not occur at that segment.
-    immutable_mask = None
-    if len(exemplar_texts) == 1:
-        immutable_mask = (base_text == 0)
+    # RULE: If a manuscript does not have the PA (all segments are 0),
+    # then no mutation occurs—the passage remains absent.
+    # If the manuscript HAS the PA (at least one non-zero segment),
+    # mutation can occur freely at any segment, including changing 0s to non-zeros.
+    has_pa = np.any(base_text != 0)
 
-    mutated_text = mutate_tagged_string(base_text, rng, proportion, config, immutable_mask=immutable_mask)
+    if not has_pa:
+        # If no PA is present, return the base_text (all 0s) without mutation.
+        return base_text
+
+    # If PA is present, mutate the string normally.
+    mutated_text = mutate_tagged_string(base_text, rng, proportion, config, immutable_mask=None)
 
     return mutated_text

@@ -8,7 +8,7 @@ for both textual replay regimes.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import networkx as nx
 import numpy as np
@@ -34,6 +34,8 @@ class ReplayResult:
     pa_regime: str
     instance_texts: Dict[str, np.ndarray]
     seed: int
+    innovator_id: str
+    majority_text_segments: List[int]
 
 
 @dataclass
@@ -164,23 +166,25 @@ def run_single(
         replay_engine = TextReplayEngine(regime_config, snapshot, replay_seed)
         replayed_texts = replay_engine.run()
 
-        # Store the result in the result object
-        result.replays[r] = ReplayResult(
-            pa_regime=r,
-            instance_texts=replayed_texts,
-            seed=replay_seed,
-        )
-
-        # Save this regime's specific output if requested
-        if persistence_level == "full" and run_dir:
-            save_replay(result, run_dir, r)
-
         # 12. Always compute and write temporary results for aggregation
         from pasim.analysis.majority_text import compute_majority_text
 
         survivor_ids = result.survivor_sampling_result.sampled_witness_ids
         survivor_genomes = [replayed_texts[sid] for sid in survivor_ids if sid in replayed_texts]
         majority_segments = compute_majority_text(survivor_genomes)
+
+        # Store the result in the result object
+        result.replays[r] = ReplayResult(
+            pa_regime=r,
+            instance_texts=replayed_texts,
+            seed=replay_seed,
+            innovator_id=replay_engine.innovator_id,
+            majority_text_segments=majority_segments,
+        )
+
+        # Save this regime's specific output if requested
+        if persistence_level == "full" and run_dir:
+            save_replay(result, run_dir, r)
 
         write_temp_result(
             experiment_root=params_path_obj.parent,

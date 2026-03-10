@@ -131,16 +131,16 @@ The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`.
 -   **Robust Retry Logic**: It implements a retry mechanism for individual tasks, allowing failures to be recorded and retried without halting the entire batch.
 -   **Result Collection**: It collects summaries from all workers (including failure records) and returns a comprehensive summary of the entire experiment.
 
-### Mutation Rule: Restricted Mutation on Absent Segments
+### Mutation Rule: Instance-Level Immutability
 
-To ensure realistic scribal behavior, the mutation system enforces a specific restriction on segments representing textual absence (value `0`):
+To ensure realistic scribal behavior, the mutation system enforces a restriction based on the presence of the Pericope Adulterae (PA) within a witness instance:
 
--   **Single-Parent Rule**: If a manuscript is produced from exactly one parent exemplar, any segment inherited as `0` is considered **immutable**. The scribe cannot "mutate" a passage into existence if it was not present in the source. In this scenario, `0` always transitions to `0`.
--   **Mutation Count Calculation**: When the Single-Parent Rule is active, the target number of mutations (derived from the `expected_proportion`) is calculated based only on the **mutable** segments (those with non-zero values). This ensures that the configured error rate applies specifically to the text the scribe can actually change, preventing an unintended "acceleration" of the value 0 sink.
--   **Multi-Parent Rule**: When a manuscript is produced via contamination (multi-parent transmission), the existing mutation probabilities apply to all segments, including those resolved as `0`. This allows for the possibility of segments being introduced during the more complex process of resolving multiple sources.
--   **Non-Zero Segments**: Segments with non-zero values (existing readings) continue to follow standard mutation behavior regardless of the number of parents.
+-   **PA-Presence Rule**: A witness is considered to "have the PA" if at least one segment in its tagged string has a non-zero value.
+-   **Locking for Absent Passages**: If a manuscript does not have the PA (all segments are `0`), it is considered **locked**. No mutations can occur, and the passage remains absent (`0` always transitions to `0`). This models the fact that a scribe cannot "mutate" a large missing passage into existence during a standard copying event.
+-   **Flexibility for Present Passages**: If a manuscript *has* the PA (at least one non-zero segment), the entire string is mutable. Mutations can change non-zero readings to other non-zero readings, create new `0` segments (internal omissions), or "fix" existing `0` segments by changing them back to non-zero readings.
+-   **Inversion via Intervention**: The only way for an all-zero tradition to gain the PA is through the historical **PA Intervention**, where the "innovator" node is explicitly assigned a non-zero text regardless of its parents.
 
-This rule ensures that in direct transmission lineages, absent passages remain absent unless explicitly introduced by a historical intervention.
+This rule ensures that no-PA lineages remain stable, while PA-containing lineages can evolve, mutate, and even recover from internal omissions.
 
 ### Simulation Execution Layers
 
