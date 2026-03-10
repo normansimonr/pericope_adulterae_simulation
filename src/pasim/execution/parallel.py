@@ -12,18 +12,21 @@ logger = logging.getLogger(__name__)
 def _run_wrapper(
     params_path: str,
     run_spec: RunSpec,
-    regime: str,
+    regime: Optional[str],
     max_retries: int,
     persistence_level: str = "full",
 ) -> Dict[str, Any]:
     """
-    Wrapper function to execute a single simulation run for a specific regime with retry logic.
+    Wrapper function to execute a single simulation run for one or more regimes with retry logic.
     Returns a dictionary indicating success/failure and relevant data.
     """
     for attempt in range(max_retries + 1):
         try:
-            # Note: run_single now handles a single regime if specified
-            result = run_single(
+            # We explicitly discard the full in-memory result object here
+            # to prevent it from being pickled and sent back to the main process,
+            # which can cause massive memory spikes for large graphs.
+            # All critical data is already persisted to disk.
+            run_single(
                 params_path=params_path,
                 seed=run_spec.seed,
                 persistence_level=persistence_level,
@@ -32,7 +35,6 @@ def _run_wrapper(
             )
             return {
                 "status": "success",
-                "result": result,
                 "run_id": run_spec.run_id,
                 "regime": regime,
                 "seed": run_spec.seed,
@@ -41,15 +43,12 @@ def _run_wrapper(
             }
         except Exception as e:
             logger.warning(
-                f"Run {run_spec.run_id} ({regime}, seed: {run_spec.seed}) failed on attempt {attempt}/{max_retries}: {e}"
+                f"Run {run_spec.run_id} ({regime or 'both'}, seed: {run_spec.seed}) failed on attempt {attempt}/{max_retries}: {e}"
             )
             if attempt >= max_retries:
-                logger.error(
-                    f"Run {run_spec.run_id} ({regime}, seed: {run_spec.seed}) failed after {max_retries} retries."
-                )
+                logger.error(f"Run {run_spec.run_id} ({regime or 'both'}, seed: {run_spec.seed}) failed after {max_retries} retries.")
                 return {
                     "status": "failure",
-                    "result": None,
                     "run_id": run_spec.run_id,
                     "regime": regime,
                     "seed": run_spec.seed,
@@ -58,7 +57,6 @@ def _run_wrapper(
                 }
     return {
         "status": "failure",
-        "result": None,
         "run_id": run_spec.run_id,
         "regime": regime,
         "seed": run_spec.seed,
@@ -77,6 +75,7 @@ def run_parallel(
 ) -> Dict[str, Any]:
     """
     Orchestrates multiple independent simulation runs in parallel.
+    Each run consists of one demographic generation and two textual replays.
 
     Args:
         params_path (str): Path to the YAML configuration file for the experiment.
@@ -102,7 +101,6 @@ def run_parallel(
 
     # Generate the deterministic run plan
     run_plan = generate_run_plan(n_runs, seed=seed)
-    regimes = ["insertion", "omission"]
 
     successful_runs_count = 0
     failed_runs_count = 0
@@ -113,58 +111,49 @@ def run_parallel(
         num_processes = os.cpu_count() or 1
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
-        # Submit all (run x regime) pairs to the executor
+        # Submit each run to the executor. Each run will handle its own
+        # demographic phase and both textual regimes, avoiding redundant work.
         futures = {}
         for run_spec in run_plan:
-            for regime in regimes:
-                future = executor.submit(
-                    _run_wrapper,
-                    params_path,
-                    run_spec,
-                    regime,
-                    max_retries,
-                    persistence_level,
-                )
-                futures[future] = (run_spec, regime)
+            future = executor.submit(
+                _run_wrapper,
+                params_path,
+                run_spec,
+                None,  # Run both regimes
+                max_retries,
+                persistence_level,
+            )
+            futures[future] = run_spec
 
         for future in as_completed(futures):
-            run_spec, regime = futures[future]
+            run_spec = futures[future]
             try:
                 result_data = future.result()
                 if result_data["status"] == "success":
                     successful_runs_count += 1
-                    logger.info(
-                        f"Run {run_spec.run_id} ({regime}, seed: {run_spec.seed}) completed successfully."
-                    )
+                    logger.info(f"Run {run_spec.run_id} (seed: {run_spec.seed}) completed successfully.")
                 else:
                     failed_runs_count += 1
                     failure_records.append({
                         "run_id": run_spec.run_id,
-                        "regime": regime,
                         "seed": run_spec.seed,
                         "error": result_data["error"],
                         "attempt": result_data["retries"],
                     })
-                    logger.error(
-                        f"Run {run_spec.run_id} ({regime}, seed: {run_spec.seed}) failed: {result_data['error']}"
-                    )
+                    logger.error(f"Run {run_spec.run_id} (seed: {run_spec.seed}) failed: {result_data['error']}")
             except Exception as exc:
                 failed_runs_count += 1
                 failure_records.append({
                     "run_id": run_spec.run_id,
-                    "regime": regime,
                     "seed": run_spec.seed,
                     "error": f"Unhandled exception: {str(exc)}",
                     "attempt": 0,
                 })
-                logger.critical(
-                    f"Run {run_spec.run_id} ({regime}, seed: {run_spec.seed}) generated an unhandled exception: {exc}"
-                )
+                logger.critical(f"Run {run_spec.run_id} (seed: {run_spec.seed}) generated an unhandled exception: {exc}")
 
     return {
         "successful_runs": successful_runs_count,
         "failed_runs": failed_runs_count,
         "failure_records": failure_records,
-        "total_runs_attempted": n_runs * len(regimes),
+        "total_runs_attempted": n_runs,
     }
-

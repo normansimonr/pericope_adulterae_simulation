@@ -126,7 +126,8 @@ print(experiment_summary)
 The `pasim.execution.parallel.run_parallel` function underlies `run_experiment`. It is responsible for:
 
 -   **Deterministic Run Planning**: Before execution, it generates a complete "run plan" consisting of `RunSpec` objects (containing unique `run_id` and `seed`). This ensures that run identifiers are assigned once in the main process and remain consistent regardless of worker scheduling or execution order.
--   **Dual-Regime Distribution**: It launches independent simulation tasks for each (run x regime) pair concurrently using process-based parallelism. Each worker receives a specific `RunSpec` and a target regime (`"insertion"` or `"omission"`).
+-   **Consolidated Run Execution**: It launches independent simulation tasks for each `run_id`. Each task executes the demographic generation phase exactly once and then performs both the `"insertion"` and `"omission"` textual replays in memory. This optimization significantly reduces CPU and memory overhead by avoiding redundant demographic simulation.
+-   **Memory-Efficient IPC**: Workers explicitly discard large in-memory objects (like the full genealogy graph) after persistence and before returning to the main process. This prevents massive memory spikes during inter-process communication (IPC) and ensures stability for large-scale simulations.
 -   **Robust Retry Logic**: It implements a retry mechanism for individual tasks, allowing failures to be recorded and retried without halting the entire batch.
 -   **Result Collection**: It collects summaries from all workers (including failure records) and returns a comprehensive summary of the entire experiment.
 

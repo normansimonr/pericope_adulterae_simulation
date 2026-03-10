@@ -136,7 +136,7 @@ class SimulationConfig(BaseModel):
     material_transitions: List[MaterialTransitionConfig] = []
     script_transitions: List[ScriptTransitionConfig] = []
     demand_schedule: DemandScheduleConfig
-    log_tick_frequency: int = Field(1, ge=1)
+    log_tick_frequency: int = Field(100, ge=1)
     validation_frequency: int = Field(10, ge=0)  # 0 means disabled, N means every N ticks
 
     # PA Regime Configuration
