@@ -113,10 +113,8 @@ def _cmd_run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _cmd_reset(args: argparse.Namespace) -> None:
-    """Cleans up experiment run data."""
-    _configure_logging(args.verbose)
-
+def _get_reset_targets() -> tuple[List[Path], List[Path]]:
+    """Identifies the directories and files to be removed during a reset."""
     target_dirs: List[Path] = []
     target_files: List[Path] = []
 
@@ -129,23 +127,23 @@ def _cmd_reset(args: argparse.Namespace) -> None:
             metadata_file = exp_dir / "experiment_metadata.json"
             if metadata_file.is_file():
                 target_files.append(metadata_file)
+    return target_dirs, target_files
 
-    if not target_dirs and not target_files:
-        logger.info("No experiment run data found to reset.")
-        sys.exit(0)
 
-    if not args.force:
-        print("The following experiment run data will be removed:")
-        for d in target_dirs:
-            print(f"  - {d}")
-        for f in target_files:
-            print(f"  - {f}")
+def _confirm_reset(target_dirs: List[Path], target_files: List[Path]) -> bool:
+    """Asks the user for confirmation before resetting data."""
+    print("The following experiment run data will be removed:")
+    for d in target_dirs:
+        print(f"  - {d}")
+    for f in target_files:
+        print(f"  - {f}")
 
-        confirmation = input("Are you sure you want to proceed? (y/N): ")
-        if confirmation.lower() != "y":
-            logger.info("Reset operation cancelled by user.")
-            sys.exit(0)
+    confirmation = input("Are you sure you want to proceed? (y/N): ")
+    return confirmation.lower() == "y"
 
+
+def _perform_reset(target_dirs: List[Path], target_files: List[Path]) -> None:
+    """Performs the actual removal of experiment data."""
     for d in target_dirs:
         try:
             shutil.rmtree(d)
@@ -161,6 +159,23 @@ def _cmd_reset(args: argparse.Namespace) -> None:
         except Exception as e:
             logger.error(f"Failed to remove file {f}: {e}")
             sys.exit(1)
+
+
+def _cmd_reset(args: argparse.Namespace) -> None:
+    """Cleans up experiment run data."""
+    _configure_logging(args.verbose)
+
+    target_dirs, target_files = _get_reset_targets()
+
+    if not target_dirs and not target_files:
+        logger.info("No experiment run data found to reset.")
+        sys.exit(0)
+
+    if not args.force and not _confirm_reset(target_dirs, target_files):
+        logger.info("Reset operation cancelled by user.")
+        sys.exit(0)
+
+    _perform_reset(target_dirs, target_files)
 
     logger.info("Reset complete.")
     sys.exit(0)
@@ -185,59 +200,59 @@ def _cmd_tests(args: argparse.Namespace) -> None:
     sys.exit(exit_code)
 
 
-def _cmd_list(args: argparse.Namespace) -> None:
-    """Lists all experiments and their statuses."""
-    _configure_logging(args.verbose)
+def _get_experiment_info(exp_dir: Path) -> Dict[str, Any]:
+    """Retrieves status and run counts for a single experiment directory."""
+    params_file = exp_dir / "params.yaml"
+    metadata_file = exp_dir / "experiment_metadata.json"
 
-    logger.info(f"Scanning experiments in '{EXPERIMENTS_DIR}'...")
+    exp_name = exp_dir.name
+    n_runs_requested = "N/A"
+    n_runs_completed = "N/A"
+    exp_status = "Pending / No Metadata"
 
+    if params_file.is_file():
+        try:
+            params = _load_params_file(params_file)
+            n_runs_requested = params.get("n_runs", "N/A")
+        except Exception as e:
+            logger.warning(f"Could not load params for {exp_name}: {e}")
+            n_runs_requested = "Error"
+    else:
+        logger.warning(f"No params.yaml found for experiment: {exp_name}")
+
+    if metadata_file.is_file():
+        try:
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
+
+            n_runs_completed = metadata["run_counts"]["successful"] + metadata["run_counts"]["failed"]
+            exp_status = metadata.get("execution_status", "UNKNOWN").replace("_", " ").title()
+
+        except Exception as e:
+            logger.warning(f"Could not load metadata for {exp_name}: {e}")
+            exp_status = "Metadata Error"
+
+    return {
+        "name": exp_name,
+        "requested": n_runs_requested,
+        "completed": n_runs_completed,
+        "status": exp_status,
+    }
+
+
+def _collect_experiments_data() -> List[Dict[str, Any]]:
+    """Scans the experiments directory and collects information for all experiments."""
     experiments_data: List[Dict[str, Any]] = []
 
     for exp_dir in EXPERIMENTS_DIR.iterdir():
         if exp_dir.is_dir() and exp_dir.name != PARAMS_TEMPLATE_PATH.stem:
-            params_file = exp_dir / "params.yaml"
-            metadata_file = exp_dir / "experiment_metadata.json"
+            info = _get_experiment_info(exp_dir)
+            experiments_data.append(info)
+    return experiments_data
 
-            exp_name = exp_dir.name
-            n_runs_requested = "N/A"
-            n_runs_completed = "N/A"
-            exp_status = "N/A"
 
-            if params_file.is_file():
-                try:
-                    params = _load_params_file(params_file)
-                    n_runs_requested = params.get("n_runs", "N/A")
-                except Exception as e:
-                    logger.warning(f"Could not load params for {exp_name}: {e}")
-                    n_runs_requested = "Error"
-            else:
-                logger.warning(f"No params.yaml found for experiment: {exp_name}")
-
-            if metadata_file.is_file():
-                try:
-                    with open(metadata_file, "r") as f:
-                        metadata = json.load(f)
-
-                    n_runs_completed = metadata["run_counts"]["successful"] + metadata["run_counts"]["failed"]
-                    exp_status = metadata.get("execution_status", "UNKNOWN").replace("_", " ").title()
-
-                except Exception as e:
-                    logger.warning(f"Could not load metadata for {exp_name}: {e}")
-                    exp_status = "Metadata Error"
-            else:
-                exp_status = "Pending / No Metadata"
-
-            experiments_data.append({
-                "name": exp_name,
-                "requested": n_runs_requested,
-                "completed": n_runs_completed,
-                "status": exp_status,
-            })
-
-    if not experiments_data:
-        logger.info("No experiment directories found (excluding params_template).")
-        sys.exit(0)
-
+def _print_experiments_table(experiments_data: List[Dict[str, Any]]) -> None:
+    """Prints the experiment data in a formatted table."""
     # Print header
     print(f"\n{'Experiment Name':<30} {'Requested Runs':<15} {'Completed Runs':<15} {'Status':<25}")
     print(f"{'-' * 30:<30} {'-' * 15:<15} {'-' * 15:<15} {'-' * 25:<25}")
@@ -245,6 +260,20 @@ def _cmd_list(args: argparse.Namespace) -> None:
     for exp in sorted(experiments_data, key=lambda x: x["name"]):
         print(f"{exp['name']:<30} {str(exp['requested']):<15} {str(exp['completed']):<15} {exp['status']:<25}")
 
+
+def _cmd_list(args: argparse.Namespace) -> None:
+    """Lists all experiments and their statuses."""
+    _configure_logging(args.verbose)
+
+    logger.info(f"Scanning experiments in '{EXPERIMENTS_DIR}'...")
+
+    experiments_data = _collect_experiments_data()
+
+    if not experiments_data:
+        logger.info("No experiment directories found (excluding params_template).")
+        sys.exit(0)
+
+    _print_experiments_table(experiments_data)
     sys.exit(0)
 
 

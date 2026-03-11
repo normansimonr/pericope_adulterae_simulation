@@ -74,28 +74,18 @@ def mutate_tagged_string(
         - Raises `ValueError` if the input `tagged_string` has an incorrect
           length.
     """
-    if not (0.0 <= expected_proportion <= 1.0):
-        raise ValueError(f"Expected proportion must be between 0.0 and 1.0 (inclusive), but got {expected_proportion}.")
-
-    if len(tagged_string) != config.text_length:
-        raise ValueError(f"Tagged string must have length {config.text_length}, but got {len(tagged_string)}.")
+    _validate_mutation_inputs(expected_proportion, tagged_string, config)
 
     if expected_proportion == 0.0:
         return tagged_string.copy()
 
     # Identify indices that can be mutated
-    if immutable_mask is not None:
-        mutable_indices = np.where(~immutable_mask)[0]
-    else:
-        mutable_indices = np.arange(config.text_length)
+    mutable_indices = _get_mutable_indices(config.text_length, immutable_mask)
 
     # Calculate the target number of segments to mutate based on the MUTABLE part of the string.
     # This ensures that the configured error rate applies specifically to segments the scribe
     # can actually change, avoiding an unintended "acceleration" of the value 0 sink.
     n_mutations = int(round(expected_proportion * len(mutable_indices)))
-
-    if n_mutations == 0:
-        return tagged_string.copy()
 
     # Adjust n_mutations if it exceeds available mutable indices (safety)
     n_to_mutate = min(n_mutations, len(mutable_indices))
@@ -106,6 +96,38 @@ def mutate_tagged_string(
     # Randomly select unique indices to mutate from the mutable set
     indices_to_mutate = rng.choice(mutable_indices, size=n_to_mutate, replace=False)
 
+    return _apply_mutations(tagged_string, indices_to_mutate, rng)
+
+
+def _validate_mutation_inputs(
+    expected_proportion: float,
+    tagged_string: NDArray[np.int16],
+    config: SimulationConfig,
+) -> None:
+    """Validates the input parameters for mutation."""
+    if not (0.0 <= expected_proportion <= 1.0):
+        raise ValueError(f"Expected proportion must be between 0.0 and 1.0 (inclusive), but got {expected_proportion}.")
+
+    if len(tagged_string) != config.text_length:
+        raise ValueError(f"Tagged string must have length {config.text_length}, but got {len(tagged_string)}.")
+
+
+def _get_mutable_indices(
+    text_length: int,
+    immutable_mask: Optional[NDArray[np.bool_]],
+) -> NDArray[np.intp]:
+    """Returns the indices of the tagged string that are allowed to be mutated."""
+    if immutable_mask is not None:
+        return np.where(~immutable_mask)[0]
+    return np.arange(text_length)
+
+
+def _apply_mutations(
+    tagged_string: NDArray[np.int16],
+    indices_to_mutate: NDArray[np.intp],
+    rng: np.random.Generator,
+) -> NDArray[np.int16]:
+    """Performs the actual mutation of the values at the specified indices."""
     # Create a new array to store the mutated string
     new_string = tagged_string.copy()
 
@@ -113,11 +135,10 @@ def mutate_tagged_string(
     current_values_at_indices = new_string[indices_to_mutate]
 
     # Generate random choices from all possible legal values for the positions to mutate
-    # The size of this random array is `n_to_mutate`
     new_values = rng.choice(
-        LEGAL_SEGMENT_VALUES,  # Using the global LEGAL_SEGMENT_VALUES from tagged_string_constraints
-        size=n_to_mutate,
-        replace=True,  # Allow duplicates, as different positions can mutate to same value
+        LEGAL_SEGMENT_VALUES,
+        size=len(indices_to_mutate),
+        replace=True,
     )
 
     # Identify where the random choice is the same as the current value
@@ -128,7 +149,6 @@ def mutate_tagged_string(
     # "next" value in the contiguous alphabet [0, 5].
     if np.any(mask_resample):
         # Shift the value by 1 (wrapping around 6) to guarantee a different value.
-        # This is safe because our alphabet is [0, 1, 2, 3, 4, 5].
         new_values[mask_resample] = (current_values_at_indices[mask_resample] + 1) % 6
 
     # Apply the new values to the `new_string` at the `indices_to_mutate`

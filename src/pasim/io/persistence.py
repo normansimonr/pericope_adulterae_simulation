@@ -27,78 +27,82 @@ class CustomJsonEncoder(json.JSONEncoder):
     including Path objects, Enums, NumPy scalars/arrays, and Pydantic models.
     """
 
-    def default(self, obj):
-        if isinstance(obj, Path):
-            return str(obj)
-        if isinstance(obj, Enum):
-            return obj.value
+    def _handle_numpy(self, obj):
         if isinstance(obj, (np.integer, np.floating, np.bool_)):
             return obj.item()
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        if dataclasses.is_dataclass(obj):
-            return dataclasses.asdict(obj)
-        # Handle Pydantic models (v2 prefers model_dump, v1 uses dict())
+        return None
+
+    def _handle_pydantic(self, obj):
         if isinstance(obj, pydantic.BaseModel):
             if hasattr(obj, "model_dump"):  # Pydantic v2
                 return obj.model_dump()
             else:  # Pydantic v1
                 return obj.model_dump()
+        return None
+
+    def default(self, obj):
+        if isinstance(obj, Path):
+            return str(obj)
+        if isinstance(obj, Enum):
+            return obj.value
+
+        numpy_res = self._handle_numpy(obj)
+        if numpy_res is not None:
+            return numpy_res
+
+        if dataclasses.is_dataclass(obj):
+            return dataclasses.asdict(obj)
+
+        pydantic_res = self._handle_pydantic(obj)
+        if pydantic_res is not None:
+            return pydantic_res
+
         return super().default(obj)
 
 
 # ... (rest of the file remains the same until _resolve_run_directory) ...
 
 
+def _get_existing_run_numbers(runs_dir: Path) -> list[int]:
+    """Helper to list all existing run numbers in the runs directory."""
+    existing_run_numbers = []
+    if runs_dir.is_dir():
+        for item in runs_dir.iterdir():
+            if item.is_dir() and item.name.startswith("run_"):
+                try:
+                    existing_run_numbers.append(int(item.name[4:]))
+                except ValueError:
+                    continue  # Ignore malformed directories
+    return existing_run_numbers
+
+
 def resolve_run_directory(params_path: Path, create_dir: bool = True) -> Path:
     """
     Determines a unique run directory path. If create_dir is True, ensures its existence.
     Robustly handles concurrent calls from parallel processes.
-
-    Given a params_path like 'experiments/exp000_baseline/params.yaml',
-    it will create a directory like 'experiments/exp000_baseline/runs/<run_id>/'.
-
-    Args:
-        params_path: Path to the experiment's parameters file.
-        create_dir: Whether to actually create the directory on disk.
-
-    Returns:
-        The Path to the unique run directory.
     """
     experiment_dir = params_path.parent
     runs_dir = experiment_dir / "runs"
 
     if create_dir:
-        runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure parent 'runs' directory exists
+        runs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Implement a retry loop to find a unique run number in a concurrent-safe way
     max_retries = 10
     for _ in range(max_retries):
-        existing_run_numbers = []
-        if runs_dir.is_dir():
-            for item in runs_dir.iterdir():
-                if item.is_dir() and item.name.startswith("run_"):
-                    try:
-                        existing_run_numbers.append(int(item.name[4:]))
-                    except ValueError:
-                        continue  # Ignore malformed directories
-
-        next_run_number = 0
-        if existing_run_numbers:
-            next_run_number = max(existing_run_numbers) + 1
-
+        existing_run_numbers = _get_existing_run_numbers(runs_dir)
+        next_run_number = max(existing_run_numbers) + 1 if existing_run_numbers else 0
         run_dir = runs_dir / f"run_{next_run_number}"
 
         if not create_dir:
             return run_dir
 
         try:
-            run_dir.mkdir(parents=True)  # Attempt to create the directory exclusively
-            return run_dir  # Success! Return the unique directory
+            run_dir.mkdir(parents=True)
+            return run_dir
         except FileExistsError:
-            # Directory was created by another process concurrently.
-            # Loop again to find the next available number.
-            time.sleep(0.01)  # Small backoff to reduce contention
+            time.sleep(0.01)
 
     raise RuntimeError(f"Failed to create a unique run directory after {max_retries} retries in {runs_dir}")
 
@@ -202,50 +206,53 @@ def _save_manuscripts(run_dir: Path, result: "SimulationResult"):
         json.dump(manuscripts_data, f, indent=2, cls=CustomJsonEncoder)
 
 
+def _get_first_available_text_length(result: "SimulationResult", texts: dict[str, np.ndarray]) -> int | None:
+    """Finds the length of the first available survivor text."""
+    for sid in result.survivor_sampling_result.sampled_witness_ids:
+        if sid in texts:
+            return len(texts[sid])
+    return None
+
+
+def _get_sorted_survivor_instances(result: "SimulationResult", survivor_ids: set[str]) -> list[tuple[str, int]]:
+    """Returns a list of survivor instance IDs sorted by birth tick."""
+    instance_birth_ticks = []
+    for node_id, data in result.graph.nodes(data=True):
+        if node_id in survivor_ids:
+            instance_birth_ticks.append((node_id, data["birth_tick"]))
+    instance_birth_ticks.sort(key=lambda x: x[1])
+    return instance_birth_ticks
+
+
+def _write_texts_to_file(f, instance_birth_ticks: list[tuple[str, int]], texts: dict[str, np.ndarray], text_length: int):
+    """Writes instance texts to the provided file handle in TSV format."""
+    header = "instance_id\t" + "\t".join(f"token_{i}" for i in range(text_length))
+    f.write(header + "\n")
+
+    for instance_id, _ in instance_birth_ticks:
+        text_array = texts.get(instance_id)
+        if text_array is not None:
+            text_str = "\t".join(map(str, text_array.tolist()))
+            f.write(f"{instance_id}\t{text_str}\n")
+
+
 def _save_instance_texts(regime_dir: Path, result: "SimulationResult", texts: dict[str, np.ndarray]):
     """
     Saves sampled instance texts in TSV format for a specific regime.
     Also creates a dummy witnesses.parquet to satisfy path requirements.
     """
     file_path = regime_dir / "instance_texts.tsv"
-
     survivor_ids = set(result.survivor_sampling_result.sampled_witness_ids)
 
-    # Always create the file, even if empty
     with open(file_path, "w") as f:
         if not texts or not survivor_ids:
-            return
+            pass
+        else:
+            text_length = _get_first_available_text_length(result, texts)
+            if text_length is not None:
+                instance_birth_ticks = _get_sorted_survivor_instances(result, survivor_ids)
+                _write_texts_to_file(f, instance_birth_ticks, texts, text_length)
 
-        # Determine text length and generate header
-        # Find first survivor that exists in texts
-        first_id = None
-        for sid in result.survivor_sampling_result.sampled_witness_ids:
-            if sid in texts:
-                first_id = sid
-                break
-
-        if first_id is None:
-            return
-
-        text_length = len(texts[first_id])
-        header = "instance_id\t" + "\t".join(f"token_{i}" for i in range(text_length))
-        f.write(header + "\n")
-
-        # Get instance IDs and their birth ticks from the graph, then sort
-        instance_birth_ticks = []
-        for node_id, data in result.graph.nodes(data=True):
-            if node_id in survivor_ids:
-                instance_birth_ticks.append((node_id, data["birth_tick"]))
-        instance_birth_ticks.sort(key=lambda x: x[1])  # Sort by birth_tick
-
-        # Write texts in order
-        for instance_id, _ in instance_birth_ticks:
-            text_array = texts.get(instance_id)
-            if text_array is not None:
-                text_str = "\t".join(map(str, text_array.tolist()))
-                f.write(f"{instance_id}\t{text_str}\n")
-
-    # Always touch parquet to satisfy naming requirement
     (regime_dir / "witnesses.parquet").touch()
 
 
@@ -257,48 +264,55 @@ def _save_telemetry(run_dir: Path, result: "SimulationResult"):
         json.dump(result.state.telemetry, f, indent=2, cls=CustomJsonEncoder)
 
 
+def _collect_manuscript_events(result: "SimulationResult") -> list[dict]:
+    """Infers manuscript birth and death events from the registry."""
+    events = []
+    for ms_id, manuscript in result.state.registries.manuscripts.items():
+        events.append({"tick": manuscript.birth_tick, "type": "manuscript_birth", "id": ms_id})
+        if manuscript.death_tick is not None and manuscript.death_tick != float("inf"):
+            event_type = "manuscript_destroyed" if manuscript.death_reason == DeathReason.PERSECUTION else "manuscript_death"
+            events.append({"tick": manuscript.death_tick, "type": event_type, "id": ms_id})
+    return events
+
+
+def _collect_instance_events(result: "SimulationResult") -> list[dict]:
+    """Infers instance birth events from the graph nodes."""
+    events = []
+    for node_id, data in result.graph.nodes(data=True):
+        parents = list(result.graph.predecessors(node_id))
+        events.append({"tick": data["birth_tick"], "type": "instance_birth", "id": node_id, "parents": parents})
+    return events
+
+
+def _write_event_to_log(f, event: dict):
+    """Writes a single event entry to the log file handle."""
+    tick, event_id = event["tick"], event["id"]
+    if event["type"] == "manuscript_birth":
+        f.write(f"[TICK {tick}] Manuscript {event_id} created\n")
+    elif event["type"] == "manuscript_death":
+        f.write(f"[TICK {tick}] Manuscript {event_id} died\n")
+    elif event["type"] == "manuscript_destroyed":
+        f.write(f"[TICK {tick}] Manuscript {event_id} destroyed\n")
+    elif event["type"] == "instance_birth":
+        if event["parents"]:
+            parents = ", ".join(map(str, cast(List[str], event["parents"])))
+            f.write(f"[TICK {tick}] Instance {event_id} created from {parents}\n")
+        else:
+            f.write(f"[TICK {tick}] Instance {event_id} created (autograph)\n")
+
+
 def _save_events_log(run_dir: Path, result: "SimulationResult"):
     """
     Generates and saves a chronological log of key simulation events.
     Infers events from the final state of the simulation result.
     """
-    events = []
-
-    # Collect manuscript birth and death events from the manuscript registry
-    for ms_id, manuscript in result.state.registries.manuscripts.items():
-        events.append({"tick": manuscript.birth_tick, "type": "manuscript_birth", "id": ms_id})
-
-        if manuscript.death_tick is not None and manuscript.death_tick != float("inf"):
-            # Use the new `death_reason` field to determine event type
-            if manuscript.death_reason == DeathReason.PERSECUTION:
-                event_type = "manuscript_destroyed"
-            else:  # Covers NATURAL and None as a fallback
-                event_type = "manuscript_death"
-            events.append({"tick": manuscript.death_tick, "type": event_type, "id": ms_id})
-
-    # Infer instance birth events (from graph nodes)
-    for node_id, data in result.graph.nodes(data=True):
-        parents = list(result.graph.predecessors(node_id))
-        event_info = {"tick": data["birth_tick"], "type": "instance_birth", "id": node_id, "parents": parents}
-        events.append(event_info)
-
-    # Sort events chronologically
+    events = _collect_manuscript_events(result)
+    events.extend(_collect_instance_events(result))
     events.sort(key=lambda x: (x["tick"], x["type"]))
 
     with open(run_dir / "events.log", "w") as f:
         for event in events:
-            if event["type"] == "manuscript_birth":
-                f.write(f"[TICK {event['tick']}] Manuscript {event['id']} created\n")
-            elif event["type"] == "manuscript_death":
-                f.write(f"[TICK {event['tick']}] Manuscript {event['id']} died\n")
-            elif event["type"] == "manuscript_destroyed":
-                f.write(f"[TICK {event['tick']}] Manuscript {event['id']} destroyed\n")
-            elif event["type"] == "instance_birth":
-                if event["parents"]:
-                    parent_info = ", ".join(map(str, cast(List[str], event["parents"])))
-                    f.write(f"[TICK {event['tick']}] Instance {event['id']} created from {parent_info}\n")
-                else:
-                    f.write(f"[TICK {event['tick']}] Instance {event['id']} created (autograph)\n")
+            _write_event_to_log(f, event)
 
 
 def _save_genealogy_snapshot(run_dir: Path, result: "SimulationResult"):

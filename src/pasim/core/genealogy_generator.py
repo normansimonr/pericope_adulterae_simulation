@@ -141,6 +141,53 @@ def handle_deaths(state: GenerationState) -> GenerationState:
     return state
 
 
+def _migrate_between_regions(
+    state: GenerationState,
+    alive_list: List[str],
+    p_migration: float,
+    rng: RNG,
+    config: SimulationConfig,
+) -> List[str]:
+    """Handles migration of manuscripts between different regions."""
+    n_migrate = rng.binomial(len(alive_list), p_migration)
+    if n_migrate <= 0:
+        return []
+
+    migrating_ids = rng.choice(alive_list, size=n_migrate, replace=False).tolist()
+    for ms_id in migrating_ids:
+        manuscript = state.registries.manuscripts.get(ms_id)
+        old_region = manuscript.region
+        other_regions = [r for r in Region if r != old_region]
+        if other_regions:
+            new_region = rng.choice(other_regions)
+            manuscript.region = new_region
+            manuscript.location = generate_random_coordinates(new_region, rng, config)
+
+            # Update alive_by_region mapping
+            state.alive_by_region[old_region].remove(ms_id)
+            state.alive_by_region[new_region].add(ms_id)
+    return migrating_ids
+
+
+def _relocate_internally(
+    state: GenerationState,
+    remaining_ids: List[str],
+    p_relocation: float,
+    rng: RNG,
+    config: SimulationConfig,
+) -> None:
+    """Handles internal relocation of manuscripts within their current regions."""
+    if p_relocation <= 0 or not remaining_ids:
+        return
+
+    n_relocate = rng.binomial(len(remaining_ids), p_relocation)
+    if n_relocate > 0:
+        relocating_ids = rng.choice(remaining_ids, size=n_relocate, replace=False).tolist()
+        for ms_id in relocating_ids:
+            manuscript = state.registries.manuscripts.get(ms_id)
+            manuscript.location = generate_random_coordinates(manuscript.region, rng, config)
+
+
 def handle_migration(
     state: GenerationState,
     rng: RNG,
@@ -161,45 +208,141 @@ def handle_migration(
     Returns:
         The updated simulation state.
     """
-    p_region_migration = config.p_region_migration
-    p_internal_relocation = config.p_internal_relocation
-
-    n_alive = len(state.alive_manuscripts)
-    if n_alive == 0:
+    if not state.alive_manuscripts:
         return state
 
     alive_list = list(state.alive_manuscripts)
 
     # 1. Identify which manuscripts migrate between regions
-    n_migrate = rng.binomial(n_alive, p_region_migration)
-    migrating_ids = []
-    if n_migrate > 0:
-        migrating_ids = rng.choice(alive_list, size=n_migrate, replace=False).tolist()
-        for ms_id in migrating_ids:
-            manuscript = state.registries.manuscripts.get(ms_id)
-            old_region = manuscript.region
-            other_regions = [r for r in Region if r != old_region]
-            if other_regions:
-                new_region = rng.choice(other_regions)
-                manuscript.region = new_region
-                manuscript.location = generate_random_coordinates(new_region, rng, config)
-
-                # Update alive_by_region mapping
-                state.alive_by_region[old_region].remove(ms_id)
-                state.alive_by_region[new_region].add(ms_id)
+    migrating_ids = _migrate_between_regions(state, alive_list, config.p_region_migration, rng, config)
 
     # 2. Identify which manuscripts relocate internally
-    # (only for those that didn't migrate regions)
-    if p_internal_relocation > 0:
-        remaining_ids = list(state.alive_manuscripts - set(migrating_ids))
-        n_relocate = rng.binomial(len(remaining_ids), p_internal_relocation)
-        if n_relocate > 0:
-            relocating_ids = rng.choice(remaining_ids, size=n_relocate, replace=False).tolist()
-            for ms_id in relocating_ids:
-                manuscript = state.registries.manuscripts.get(ms_id)
-                manuscript.location = generate_random_coordinates(manuscript.region, rng, config)
+    remaining_ids = list(state.alive_manuscripts - set(migrating_ids))
+    _relocate_internally(state, remaining_ids, config.p_internal_relocation, rng, config)
 
     return state
+
+
+def _get_regional_alive_data(state: GenerationState) -> tuple[Dict[Region, KDTree], Dict[Region, List[Manuscript]]]:
+    """Pre-builds KDTrees and list of alive manuscripts for each region."""
+    kdtree_by_region: Dict[Region, KDTree] = {}
+    alive_by_region_objects: Dict[Region, List[Manuscript]] = {}
+
+    for region, ms_ids in state.alive_by_region.items():
+        if ms_ids:
+            alive_manuscripts_list = [state.registries.manuscripts.get(ms_id) for ms_id in ms_ids]
+            alive_by_region_objects[region] = alive_manuscripts_list
+            locations = np.array([ms.location for ms in alive_manuscripts_list])
+            kdtree_by_region[region] = KDTree(locations)
+    return kdtree_by_region, alive_by_region_objects
+
+
+def _generate_batch_spawn_properties(
+    n_to_spawn: int,
+    region: Region,
+    current_tick: int,
+    params: SimulationConfig,
+    rng: RNG,
+    material_transition_manager: MaterialTransitionManager,
+    script_transition_manager: ScriptTransitionManager,
+) -> Dict[str, Any]:
+    """Generates a batch of properties for manuscripts to be spawned."""
+    bounds = params.region_bounds.get(region.value)
+    if bounds is None:
+        raise ValueError(f"No bounds defined for region: {region.value}")
+    x_bounds, y_bounds = bounds[0], bounds[1]
+
+    locations_x = rng.uniform(x_bounds[0], x_bounds[1], size=n_to_spawn)
+    locations_y = rng.uniform(y_bounds[0], y_bounds[1], size=n_to_spawn)
+
+    reputation_scores = list(params.reputation_distribution.keys())
+    reputation_probs = list(params.reputation_distribution.values())
+    batch_reputations = rng.choice(reputation_scores, p=reputation_probs, size=n_to_spawn)
+
+    material_dist = material_transition_manager.get_active_distribution(current_tick)
+    batch_materials = rng.choice(material_dist["materials"], p=material_dist["probabilities"], size=n_to_spawn)
+
+    script_dist = script_transition_manager.get_active_distribution(current_tick)
+    batch_scripts = rng.choice(script_dist["scripts"], p=script_dist["probabilities"], size=n_to_spawn)
+
+    # Vectorized lifespan generation
+    batch_lifespans = np.zeros(n_to_spawn, dtype=int)
+    for mat in material_dist["materials"]:
+        mask = batch_materials == mat
+        if np.any(mask):
+            from .lifespan import _get_lognormal_params
+
+            mu, sigma = _get_lognormal_params(mat, region, params)
+            lifespans = rng.lognormal(mean=mu, sigma=sigma, size=np.sum(mask))
+            batch_lifespans[mask] = np.maximum(1, np.floor(lifespans)).astype(int)
+
+    return {
+        "locations_x": locations_x,
+        "locations_y": locations_y,
+        "reputations": batch_reputations,
+        "materials": batch_materials,
+        "scripts": batch_scripts,
+        "lifespans": batch_lifespans,
+    }
+
+
+def _handle_spawned_witness_node(
+    state: GenerationState,
+    instance_id: str,
+    witness_id: str,
+    manuscript_id: str,
+    current_tick: int,
+    reputation: int,
+    exemplars: List[str],
+    params: SimulationConfig,
+    rng: RNG,
+) -> None:
+    """Adds a new witness instance node to the genealogy graph."""
+    if exemplars:
+        add_child_node(
+            graph=state.graph,
+            node_id=instance_id,
+            parent_node_ids=exemplars,
+            witness_id=witness_id,
+            manuscript_id=manuscript_id,
+            birth_tick=current_tick,
+            reputation=reputation,
+        )
+        return
+
+    if state.graph.number_of_nodes() == 0:
+        # This is the very first node, the autograph.
+        add_root_node(
+            graph=state.graph,
+            node_id=instance_id,
+            witness_id=witness_id,
+            manuscript_id=manuscript_id,
+            birth_tick=current_tick,
+            reputation=reputation,
+        )
+    else:
+        # No local exemplars found, but the graph is not empty.
+        all_alive_instance_ids = [
+            state.manuscript_to_instance_map[ms_id] for ms_id in state.alive_manuscripts if ms_id in state.manuscript_to_instance_map
+        ]
+
+        if not all_alive_instance_ids:
+            raise ValueError("No alive instances to select parents from.")
+
+        num_parents_choice = rng.choice([1, 2, 3], p=params.parent_num_distribution)
+        num_parents = min(num_parents_choice, len(all_alive_instance_ids))
+
+        random_parents = rng.choice(all_alive_instance_ids, size=num_parents, replace=False).tolist()
+
+        add_child_node(
+            graph=state.graph,
+            node_id=instance_id,
+            parent_node_ids=random_parents,
+            witness_id=witness_id,
+            manuscript_id=manuscript_id,
+            birth_tick=current_tick,
+            reputation=reputation,
+        )
 
 
 def _spawn_new_manuscripts_from_demand(
@@ -210,194 +353,58 @@ def _spawn_new_manuscripts_from_demand(
     material_transition_manager: MaterialTransitionManager,
     script_transition_manager: ScriptTransitionManager,
 ) -> GenerationState:
-    """Spawns new manuscripts to meet exogenous demand.
-
-    This function evaluates regional demand for manuscripts at the current tick
-    and creates new manuscripts if the number of currently alive manuscripts
-    in a region ("stock") is less than the demand.
-
-    For each spawned manuscript, it also creates the associated witness and
-    adds a new root node to the genealogy graph, representing the witness
-    instance.
-
-    The relationship between these entities is:
-    `Manuscript -> Witness -> WitnessInstance (Graph Node)`
-    - A Manuscript is the physical object with metadata (region, material).
-    - A Witness is the textual content tied to a Manuscript.
-    - A WitnessInstance is an abstract node in the genealogy graph,
-      representing the manuscript's existence at a point in time.
-
-    Args:
-        state: The current simulation state.
-        demand_today: A dictionary defining regional demand for the current tick.
-        params: The validated simulation configuration object.
-        rng: The random number generator.
-        material_transition_manager: The manager for time-dependent material probabilities.
-        script_transition_manager: The manager for time-dependent script probabilities.
-
-    Returns:
-        The updated simulation state.
-    """
+    """Spawns new manuscripts to meet exogenous demand."""
     current_tick = state.tick
     if not demand_today:
         return state
 
-    # Pre-build KDTrees for each region with alive manuscripts, once per tick
-    # Use the pre-maintained alive_by_region sets for performance
-    kdtree_by_region: Dict[Region, KDTree] = {}
-    alive_by_region_objects: Dict[Region, List[Manuscript]] = {}
+    kdtree_by_region, alive_by_region_objects = _get_regional_alive_data(state)
 
-    for region, ms_ids in state.alive_by_region.items():
-        if ms_ids:
-            alive_manuscripts_list = [state.registries.manuscripts.get(ms_id) for ms_id in ms_ids]
-            alive_by_region_objects[region] = alive_manuscripts_list
-            locations = np.array([ms.location for ms in alive_manuscripts_list])
-            kdtree_by_region[region] = KDTree(locations)
-
-    # Evaluate demand and spawn
     for region, demanded_count in demand_today.items():
         stock_count = len(state.alive_by_region[region])
         n_to_spawn = demanded_count - stock_count
-        if n_to_spawn > 0:
-            # Get the pre-built KDTree for the current region, if available
-            region_kdtree = kdtree_by_region.get(region)
+        if n_to_spawn <= 0:
+            continue
 
-            # Vectorized generation for this batch
-            bounds = params.region_bounds.get(region.value)
-            if bounds is None:
-                raise ValueError(f"No bounds defined for region: {region.value}")
-            x_bounds, y_bounds = bounds[0], bounds[1]
+        region_kdtree = kdtree_by_region.get(region)
+        props = _generate_batch_spawn_properties(
+            n_to_spawn, region, current_tick, params, rng, material_transition_manager, script_transition_manager
+        )
 
-            locations_x = rng.uniform(x_bounds[0], x_bounds[1], size=n_to_spawn)
-            locations_y = rng.uniform(y_bounds[0], y_bounds[1], size=n_to_spawn)
+        for i in range(n_to_spawn):
+            manuscript_id = f"M{next(state.manuscript_id_counter)}"
+            reputation = int(props["reputations"][i])
+            manuscript = Manuscript(
+                manuscript_id=manuscript_id,
+                birth_tick=current_tick,
+                death_tick=current_tick + props["lifespans"][i],
+                material=props["materials"][i],
+                region=region,
+                location=(props["locations_x"][i], props["locations_y"][i]),
+            )
+            state.registries.manuscripts.add(manuscript)
 
-            reputation_scores = list(params.reputation_distribution.keys())
-            reputation_probs = list(params.reputation_distribution.values())
-            batch_reputations = rng.choice(reputation_scores, p=reputation_probs, size=n_to_spawn)
+            exemplars = select_exemplars(
+                new_manuscript=manuscript,
+                alive_manuscripts_in_region=alive_by_region_objects.get(region, []),
+                graph=state.graph,
+                manuscript_to_instance_map=state.manuscript_to_instance_map,
+                rng=rng,
+                config=params,
+                kdtree=region_kdtree,
+                reputation_cache=state.instance_reputations,
+            )
 
-            material_dist = material_transition_manager.get_active_distribution(current_tick)
-            batch_materials = rng.choice(material_dist["materials"], p=material_dist["probabilities"], size=n_to_spawn)
+            witness_id = f"W{next(state.witness_id_counter)}"
+            instance_id = f"I{next(state.witness_instance_id_counter)}"
+            state.registries.witnesses.add(Witness(witness_id=witness_id, manuscript_id=manuscript_id, script=props["scripts"][i]))
 
-            script_dist = script_transition_manager.get_active_distribution(current_tick)
-            batch_scripts = rng.choice(script_dist["scripts"], p=script_dist["probabilities"], size=n_to_spawn)
+            _handle_spawned_witness_node(state, instance_id, witness_id, manuscript_id, current_tick, reputation, exemplars, params, rng)
 
-            # Vectorized lifespan generation
-            batch_lifespans = np.zeros(n_to_spawn, dtype=int)
-            for mat in material_dist["materials"]:
-                mask = batch_materials == mat
-                if np.any(mask):
-                    from .lifespan import _get_lognormal_params
-
-                    mu, sigma = _get_lognormal_params(mat, region, params)
-                    lifespans = rng.lognormal(mean=mu, sigma=sigma, size=np.sum(mask))
-                    batch_lifespans[mask] = np.maximum(1, np.floor(lifespans)).astype(int)
-
-            # Spawn new manuscripts
-            for i in range(n_to_spawn):
-                # 1. Create Manuscript
-                manuscript_id = f"M{next(state.manuscript_id_counter)}"
-                location = (locations_x[i], locations_y[i])
-                reputation = int(batch_reputations[i])
-                material = batch_materials[i]
-
-                # Death tick calculation using vectorized lifespans
-                death_tick = current_tick + batch_lifespans[i]
-
-                manuscript = Manuscript(
-                    manuscript_id=manuscript_id,
-                    birth_tick=current_tick,
-                    death_tick=death_tick,
-                    material=material,
-                    region=region,
-                    location=location,
-                )
-                state.registries.manuscripts.add(manuscript)
-
-                # 2. Select Exemplars
-                exemplars = select_exemplars(
-                    new_manuscript=manuscript,
-                    alive_manuscripts_in_region=alive_by_region_objects.get(region, []),
-                    graph=state.graph,
-                    manuscript_to_instance_map=state.manuscript_to_instance_map,
-                    rng=rng,
-                    config=params,
-                    kdtree=region_kdtree,  # Pass the pre-built KDTree
-                    reputation_cache=state.instance_reputations,
-                )
-
-                # 3. Create Witness and WitnessInstance (Graph Node)
-                witness_id = f"W{next(state.witness_id_counter)}"
-                instance_id = f"I{next(state.witness_instance_id_counter)}"
-                script = batch_scripts[i]
-                witness = Witness(
-                    witness_id=witness_id,
-                    manuscript_id=manuscript_id,
-                    script=script,
-                )
-                state.registries.witnesses.add(witness)
-
-                if not exemplars:  # This covers cases where `select_exemplars` found nothing
-                    if state.graph.number_of_nodes() == 0:
-                        # This is the very first node, the autograph.
-                        add_root_node(
-                            graph=state.graph,
-                            node_id=instance_id,
-                            witness_id=witness_id,
-                            manuscript_id=manuscript_id,
-                            birth_tick=current_tick,
-                            reputation=reputation,
-                        )
-                    else:
-                        # No local exemplars found, but the graph is not empty.
-                        # Select parents from all alive instances.
-                        all_alive_instance_ids = [
-                            state.manuscript_to_instance_map[ms_id]
-                            for ms_id in state.alive_manuscripts
-                            if ms_id in state.manuscript_to_instance_map  # Safety check
-                        ]
-
-                        if not all_alive_instance_ids:
-                            # This should ideally not happen if the graph is not empty,
-                            # but if it does, it implies a bug or extreme scenario
-                            raise ValueError("No alive instances to select parents from.")
-
-                        # Determine number of parents (1-3), replicating logic from exemplar_selection
-                        num_parents_choice = rng.choice([1, 2, 3], p=params.parent_num_distribution)
-                        # Ensure we don't try to pick more parents than available
-                        num_parents = min(num_parents_choice, len(all_alive_instance_ids))
-
-                        # Select parents randomly from all alive instances
-                        random_parents = rng.choice(
-                            all_alive_instance_ids,
-                            size=num_parents,
-                            replace=False,  # Ensure unique parents
-                        ).tolist()  # Convert numpy array to list for add_child_node
-
-                        add_child_node(
-                            graph=state.graph,
-                            node_id=instance_id,
-                            parent_node_ids=random_parents,
-                            witness_id=witness_id,
-                            manuscript_id=manuscript_id,
-                            birth_tick=current_tick,
-                            reputation=reputation,
-                        )
-                else:  # Exemplars were found by select_exemplars
-                    add_child_node(
-                        graph=state.graph,
-                        node_id=instance_id,
-                        parent_node_ids=exemplars,
-                        witness_id=witness_id,
-                        manuscript_id=manuscript_id,
-                        birth_tick=current_tick,
-                        reputation=reputation,
-                    )
-
-                # 4. Update state
-                state.alive_manuscripts.add(manuscript_id)
-                state.alive_by_region[region].add(manuscript_id)
-                state.manuscript_to_instance_map[manuscript_id] = instance_id
-                state.instance_reputations[instance_id] = reputation
+            state.alive_manuscripts.add(manuscript_id)
+            state.alive_by_region[region].add(manuscript_id)
+            state.manuscript_to_instance_map[manuscript_id] = instance_id
+            state.instance_reputations[instance_id] = reputation
 
     return state
 
