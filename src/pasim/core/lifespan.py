@@ -7,64 +7,50 @@ from typing import Tuple
 
 import numpy as np
 
+from pasim.config.schema import SimulationConfig
 from pasim.core.state import Material, Region
-from pasim.core.rng import RNG
 
 
-# Define lognormal distribution parameters (mu, sigma) for different materials and regions
-# These parameters are for log(lifespan)
-LOGNORMAL_PARAMETERS = {
-    Material.PAPYRUS: {
-        (Region.ASIA_MINOR, Region.LEVANT): {"mu": 4.72, "sigma": 0.30}, # Changed PALESTINE to LEVANT
-        Region.EGYPT: {"mu": 5.12, "sigma": 0.60},
-    },
-    Material.PARCHMENT: {
-        (Region.ASIA_MINOR, Region.LEVANT): {"mu": 5.5, "sigma": 0.5}, # Changed PALESTINE to LEVANT
-        Region.EGYPT: {"mu": 6.0, "sigma": 0.5},
-    },
-    Material.PAPER: { # Added PAPER parameters
-        (Region.ASIA_MINOR, Region.LEVANT): {"mu": 5.0, "sigma": 0.5},
-        Region.EGYPT: {"mu": 5.5, "sigma": 0.5},
-    },
-}
-
-def _get_lognormal_params(material: Material, region: Region) -> Tuple[float, float]:
+def _get_lognormal_params(material: Material, region: Region, config: SimulationConfig) -> Tuple[float, float]:
     """
     Retrieves the lognormal distribution parameters (mu, sigma) for a given
-    material and region.
+    material and region from the simulation configuration.
     """
-    material_params = LOGNORMAL_PARAMETERS.get(material)
-    if material_params is None:
-        raise ValueError(f"Unsupported material for lifespan calculation: {material.value}")
+    material_name = material.value
+    region_name = region.value
 
-    # Check for direct region match
-    region_params = material_params.get(region)
-    if region_params is not None:
-        return region_params["mu"], region_params["sigma"]
+    lifespan_params = config.lifespan_parameters
 
-    # Check for region groups (e.g., ASIA_MINOR and PALESTINE)
-    for region_group, params in material_params.items():
-        if isinstance(region_group, tuple) and region in region_group:
-            return params["mu"], params["sigma"]
+    if material_name not in lifespan_params:
+        raise ValueError(f"Unsupported material for lifespan calculation: {material_name}")
 
-    raise ValueError(f"Unsupported region for lifespan calculation: {region.value} with material {material.value}")
+    material_config = lifespan_params[material_name]
+
+    if region_name not in material_config:
+        raise ValueError(f"Unsupported region for lifespan calculation: {region_name} with material {material_name}")
+
+    params = material_config[region_name]
+    if isinstance(params, dict):
+        return params["mu"], params["sigma"]
+    return params.mu, params.sigma
 
 
-def sample_lifespan(material: Material, region: Region, rng: np.random.Generator) -> int:
+def sample_lifespan(material: Material, region: Region, rng: np.random.Generator, config: SimulationConfig) -> int:
     """
     Samples a manuscript lifespan in years (simulation ticks) from a lognormal
-    distribution based on its material and region.
+    distribution based on its material and region, using parameters from config.
 
     Args:
         material (Material): The material of the manuscript.
         region (Region): The region where the manuscript is located.
         rng (np.random.Generator): The NumPy random number generator for sampling.
+        config (SimulationConfig): The simulation configuration.
 
     Returns:
         int: The sampled lifespan in years, rounded to an integer,
              and guaranteed to be at least 1.
     """
-    mu, sigma = _get_lognormal_params(material, region)
+    mu, sigma = _get_lognormal_params(material, region, config)
 
     # Sample from lognormal distribution
     lifespan_float = rng.lognormal(mean=mu, sigma=sigma)

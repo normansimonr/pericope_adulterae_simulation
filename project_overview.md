@@ -61,13 +61,22 @@ The simulation is designed to be fully parameter-driven, allowing researchers to
 -   **Historical Drivers**: The configuration schema makes a clear distinction between three types of historical drivers:
     1.  **Historical Shocks** (e.g., `persecutions`): Discrete, instantaneous events that "shock" the system, such as a persecution that destroys a fraction of manuscripts at a specific time.
     2.  **Environmental Regimes** (e.g., `material_transitions`, `script_transitions`): Long-term, evolving environmental conditions that affect the properties of **newly created** entities. This is used to model gradual shifts in technology or culture.
-    3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics. The `demand_schedule` now specifies *aggregate* demand across all regions for specific ticks. The simulation internally distributes this demand deterministically across regions based on historical allocation rules and a ceiling rounding mechanism. If a tick is not explicitly defined, the last known aggregate demand value is used, ensuring continuity.
+    3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics.
+        *   `demand_schedule`: Specifies aggregate demand across all regions.
+        *   `regional_demand_distributions`: Defines the century-based regional allocation rules.
+        *   `parent_num_distribution`: Controls the probability of multi-parent transmission (contamination).
+        *   `geographical_candidate_pool_size`: Sets the number of nearest neighbors considered for parent selection.
+        *   `region_bounds`: Defines the (x, y) boundaries for each geographical region.
     4.  **PA Regime Configuration**: Specific parameters defining the textual intervention:
         *   `pa_regime`: Either `"insertion"` or `"omission"`.
         *   `pa_intervention_year`: The tick at which the intervention occurs.
         *   `pa_intervention_region`: The region where the change originates.
         *   `pa_innovator_reputation`: The reputation assigned to the witness introducing the change.
-    5.  **Execution Configuration**:
+        *   `pa_intervention_radius`: The radius for local density calculation during innovator selection.
+    5.  **Textual Policy Configuration**:
+        *   `reputation_mutation_mapping`: Maps reputation levels to concrete mutation rates.
+        *   `survivor_sampling_targets`: Defines total targets and stratum-based distribution for historical sampling.
+    6.  **Execution Configuration**:
         *   `persistence_level`: Controls the verbosity of data saved to disk.
             *   `minimal`: Only saves the aggregated `results.csv` at the experiment root. This is the default and is optimized for large Monte Carlo batches.
             *   `full`: Saves all detailed run artefacts (genealogies, full texts, logs) in per-run subdirectories, in addition to the aggregated results.
@@ -288,7 +297,7 @@ The simulation distinguishes between two fundamental types of dynamics, which al
 
 This core distinction—shocks that alter existing state versus environments that shape new state—provides a powerful and flexible framework for constructing complex historical simulations.
 
--   **Mechanistic Rules**: These are the continuous, local, and emergent processes that drive the simulation forward tick by tick. They include manuscript death, migration, and demand-based spawning (copying). These rules are fundamental to the simulation's engine and are applied consistently. They operate within the context of the environments set by the transition regimes.
+-   **Mechanistic Rules**: These are the continuous, local, and emergent processes that drive the simulation forward tick by tick. They include manuscript death, migration, and demand-based spawning (copying). These rules are fundamental to the simulation's engine and are applied consistently. They operate within the context of the environments set by the transition regimes. Manuscript lifespans are probabilistically determined at birth using the lognormal parameters defined in the `lifespan_parameters` configuration.
 
 -   **`core/`**: This module is intended to house the core, pure, and deterministic simulation logic. This includes the fundamental rules and processes governing the textual transmission model, independent of I/O or execution concerns.
     -   `exemplar_selection.py`: Implements the two-stage exemplar selection logic, which combines geographical proximity with textual authority (reputation) to choose parents for new manuscripts.

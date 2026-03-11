@@ -28,11 +28,11 @@ def test_genealogy_determinism(config):
     seed = 42
 
     rng1 = RNGContext(seed).spawn(1)[0]
-    state1 = run_genealogy_generator(config.model_dump(), rng1)
+    state1 = run_genealogy_generator(config, rng1)
     snapshot1 = extract_genealogy_snapshot(state1)
 
     rng2 = RNGContext(seed).spawn(1)[0]
-    state2 = run_genealogy_generator(config.model_dump(), rng2)
+    state2 = run_genealogy_generator(config, rng2)
     snapshot2 = extract_genealogy_snapshot(state2)
 
     assert len(snapshot1.nodes) == len(snapshot2.nodes)
@@ -49,7 +49,7 @@ def test_text_replay_determinism(config):
     """Verify that replaying text on the same snapshot with the same seed is deterministic."""
     seed = 123
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     replay_seed = 789
@@ -68,7 +68,7 @@ def test_regime_neutrality(config):
     """Verify that different regimes (insertion/omission) share the same parent graph but have different texts."""
     seed = 555
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     # Create two configs with different regimes
@@ -93,7 +93,7 @@ def test_regime_dependent_autograph(config):
     """Verify that the autograph initialization is regime-dependent."""
     seed = 123
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     # Check for "insertion" regime

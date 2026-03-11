@@ -75,6 +75,74 @@ pa_intervention_region: "Asia Minor"
 pa_innovator_reputation: 5.0
 
 
+# --- Advanced Textual & Demographic Configuration ---
+# Optional parameters for fine-tuning the simulation's behavior.
+# Defaults match established historical models.
+
+# reputation_mutation_mapping (Dict[int, float], optional): Maps reputation (1-5)
+# to the expected proportion of segments that will mutate during a copy.
+reputation_mutation_mapping:
+  1: 0.10
+  2: 0.10
+  3: 0.30
+  4: 0.30
+  5: 0.20
+
+# survivor_sampling_targets (Dict[str, Any], optional): Targets and rules for the
+# survivorship-biased sampling process.
+survivor_sampling_targets:
+  target_total: 3000
+  target_born_650_or_later: 2400
+  target_born_earlier: 600
+  proportion_asia_minor: 0.98
+  sampling_seed_offset: 999999
+  eligibility_min_tick: 300 # Only nodes born after this tick are eligible for sampling
+  strata_boundary_tick: 650 # Ticks >= this are "later", < are "earlier"
+  strata_focus_region: "Asia Minor" # The region with high survival probability
+
+# lifespan_parameters (Dict[str, Dict[str, Dict[str, float]]], optional):
+# Lognormal distribution parameters (mu, sigma) for manuscript lifespans,
+# categorized by material and region.
+lifespan_parameters:
+  papyrus:
+    Asia Minor: {mu: 4.72, sigma: 0.30}
+    Levant: {mu: 4.72, sigma: 0.30}
+    Egypt: {mu: 5.12, sigma: 0.60}
+  parchment:
+    Asia Minor: {mu: 5.5, sigma: 0.5}
+    Levant: {mu: 5.5, sigma: 0.5}
+    Egypt: {mu: 6.0, sigma: 0.5}
+  paper:
+    Asia Minor: {mu: 5.0, sigma: 0.5}
+    Levant: {mu: 5.0, sigma: 0.5}
+    Egypt: {mu: 5.5, sigma: 0.5}
+
+# region_bounds (Dict[str, List[List[float]]], optional):
+# Bounding box coordinates [[xmin, xmax], [ymin, ymax]] for each geographical region.
+region_bounds:
+  Asia Minor: [[0.0, 100.0], [0.0, 100.0]]
+  Egypt: [[200.0, 300.0], [200.0, 300.0]]
+  Levant: [[400.0, 500.0], [400.0, 500.0]]
+
+# regional_demand_distributions (Dict[str, Dict[str, float]], optional):
+# Defines how aggregate demand is distributed across regions for different centuries.
+regional_demand_distributions:
+  "0-2": {"Asia Minor": 0.70, "Levant": 0.25, "Egypt": 0.05}
+  "3-5": {"Asia Minor": 0.55, "Levant": 0.25, "Egypt": 0.20}
+  "6+": {"Asia Minor": 1.00, "Levant": 0.00, "Egypt": 0.00}
+
+# parent_num_distribution (List[float], optional): Probabilities for a new
+# manuscript having 1, 2, or 3 parents (exemplars). Must sum to 1.0.
+parent_num_distribution: [0.8, 0.1, 0.1]
+
+# geographical_candidate_pool_size (int, optional): Number of nearest neighbors
+# considered as potential exemplars before reputation ranking.
+geographical_candidate_pool_size: 10
+
+# pa_intervention_radius (float, optional): Radius used to calculate local density
+# when selecting the "innovator" node for PA intervention.
+pa_intervention_radius: 10.0
+
 
 # persecutions (List[PersecutionEventConfig], optional): A list of historical "shock" events.
 # Each entry defines a persecution that can destroy a fraction of manuscripts in specific regions.
@@ -116,12 +184,7 @@ script_transitions:
 
 # demand_schedule (Dict[int, int], required): Defines the *aggregate* demand for new manuscripts
 # across all regions for specific ticks. The simulation will internally distribute this aggregate
-# demand across regions using a deterministic historical allocation rule.
-#
-# The allocation rule depends on the century of the tick (1 tick = 1 year, century = floor(tick / 100)):
-#   - Centuries 0-2 (0-299 years): Asia Minor: 70%, Levant: 25%, Egypt: 5%
-#   - Centuries 3-5 (300-599 years): Asia Minor: 55%, Levant: 25%, Egypt: 20%
-#   - Century 6 onwards (>= 600 years): Asia Minor: 100%, Levant: 0%, Egypt: 0%
+# demand across regions based on historical allocation rules (see regional_demand_distributions).
 #
 # When distributing, regional demands are rounded *up* (ceiling) independently.
 # Total demand may exceed the aggregate demand due to rounding.
@@ -131,8 +194,8 @@ demand_schedule:
   # 10: 20 # Example: At tick 10, aggregate demand for new manuscripts is 20.
 
 # log_tick_frequency (int, optional): The frequency (in ticks) at which progress updates
-# are logged to the console. Defaults to 1.
-log_tick_frequency: 1
+# are logged to the console. Defaults to 100.
+log_tick_frequency: 100
 
 # validation_frequency (int, optional): The frequency (in ticks) at which a full genealogy
 # graph validation (DAG and single root check) is performed.

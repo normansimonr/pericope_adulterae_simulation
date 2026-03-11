@@ -1,0 +1,2 @@
+description = "Gets project-level context from context files."
+prompt = "This is a Red/Green TDD project. Read project_overview.md for context, then await instructions."

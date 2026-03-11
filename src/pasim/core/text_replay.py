@@ -9,10 +9,6 @@ from pasim.core.rng import RNGContext
 from pasim.core.scribal_rules import apply_scribal_rule
 from pasim.core.text_initialisation import make_initial_text
 
-# Default radius for innovator selection neighbor count if not found elsewhere.
-# This represents 10% of the standard 100x100 region size.
-PA_INTERVENTION_RADIUS = 10.0
-
 
 class TextReplayEngine:
     """
@@ -75,7 +71,7 @@ class TextReplayEngine:
 
         for node in eligible_nodes:
             # Neighbor count within fixed radius
-            count = len(tree.query_ball_point(node.location, r=PA_INTERVENTION_RADIUS))
+            count = len(tree.query_ball_point(node.location, r=self.config.pa_intervention_radius))
 
             node_numeric_id = get_numeric_id(node.instance_id)
 

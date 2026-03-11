@@ -107,13 +107,13 @@ def run_single(
 
     # 5. Run demographic simulation
     # Builds the fixed genealogy graph (demographic scaffold)
-    state = run_genealogy_generator(parameters=params_dict, rng=rng)
+    state = run_genealogy_generator(config=config, rng=rng)
 
     # 6. Extract genealogy snapshot for replay
     snapshot = extract_genealogy_snapshot(state)
 
     # 7. Perform survivorship sampling
-    sampling_result = sample_survivors(snapshot, seed, config.total_ticks)
+    sampling_result = sample_survivors(snapshot, seed, config.total_ticks, config)
 
     # 8. Resolve run directory and ID
     params_path_obj = Path(params_path)

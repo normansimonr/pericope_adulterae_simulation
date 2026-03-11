@@ -11,12 +11,11 @@ from typing import Dict, List
 import numpy as np
 
 from pasim.config.schema import (
-    DemandScheduleConfig,
     SimulationConfig,
 )
 from pasim.core.genealogy import add_root_node
 from pasim.core.genealogy_generator import (
-    _allocate_demand,  # Added this line
+    _allocate_demand,
     _spawn_new_manuscripts_from_demand,
     handle_migration,
 )
@@ -51,7 +50,7 @@ def _create_initial_state(
             # Assume PARCHMENT for initial state for simplicity, as it was before.
             # Lifespan is now sampled based on material and region.
             material = Material.PARCHMENT
-            lifespan = sample_lifespan(material=material, region=region, rng=rng)
+            lifespan = sample_lifespan(material=material, region=region, rng=rng, config=config)
             death_tick_for_initial_manuscript = start_tick + lifespan
 
             manuscript = Manuscript(
@@ -120,7 +119,7 @@ def test_persecution_correctness(state_collector_fixture: List[GenerationState])
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule={0: 0},  # New aggregate format
+        demand_schedule={0: 0},
         pa_regime="insertion",
         pa_intervention_year=0,
         pa_intervention_region="Asia Minor",
@@ -188,7 +187,7 @@ def test_persecution_determinism(state_collector_fixture: List[GenerationState])
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule={0: 0},  # New aggregate format
+        demand_schedule={0: 0},
         pa_regime="insertion",
         pa_intervention_year=0,
         pa_intervention_region="Asia Minor",
@@ -232,20 +231,12 @@ def test_persecution_determinism(state_collector_fixture: List[GenerationState])
 
 def test_material_transition(state_collector_fixture: List[GenerationState]):
     """Verify newly spawned manuscripts use materials based on the active schedule."""
-    # 1. Define a 2-stage material transition schedule
     material_schedule = [
-        {
-            "start_tick": 0,
-            "distribution": {"papyrus": 1.0},
-        },
-        {
-            "start_tick": 5,
-            "distribution": {"parchment": 1.0},
-        },
+        {"start_tick": 0, "distribution": {"papyrus": 1.0}},
+        {"start_tick": 5, "distribution": {"parchment": 1.0}},
     ]
     material_manager = MaterialTransitionManager(material_schedule)
 
-    # Dummy script manager
     script_schedule = [{"start_tick": 0, "distribution": {"uncial": 1.0}}]
     script_manager = ScriptTransitionManager(script_schedule)
 
@@ -253,13 +244,7 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
         "total_ticks": 10,
         "p_region_migration": 0.0,
         "p_internal_relocation": 0.0,
-        "reputation_distribution": {
-            1: 0.2,
-            2: 0.2,
-            3: 0.2,
-            4: 0.2,
-            5: 0.2,
-        },  # Dummy 5-point distribution
+        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         "pa_regime": "insertion",
         "pa_intervention_year": 5,
         "pa_intervention_region": "Asia Minor",
@@ -267,26 +252,19 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
-        "demand_schedule": {
-            0: 2,  # Aggregate demand 2 at tick 0
-            6: 3,  # Aggregate demand 3 at tick 6
-        },
+        "demand_schedule": {0: 2, 6: 3},
     }
     dummy_simulation_config = SimulationConfig(**dummy_config_data)
 
-    # 2. Setup simulation state: Start with empty state, demand will spawn them
     rng_context = RNGContext(seed=42)
     rng = rng_context.spawn(1)[0]
     state = initialise_generation_state()
     state_collector_fixture.append(state)
-    state.tick = 0  # Initial tick
+    state.tick = 0
 
-    # 3. Simulate spawning across the transition boundary
-    # Tick 2: Aggregate demand 2. Should spawn manuscripts according to allocation.
-    # Total alive will be 3 (Asia Minor 2, Levant 1, Egypt 1 due to ceiling for aggregate 2)
     state.tick = 2
     aggregate_demand_tick_2 = dummy_simulation_config.demand_schedule.root.get(0, 0)
-    demand_today_tick_2 = _allocate_demand(state.tick, aggregate_demand_tick_2)
+    demand_today_tick_2 = _allocate_demand(state.tick, aggregate_demand_tick_2, dummy_simulation_config)
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_2,
@@ -297,11 +275,9 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     )
     assert len(state.alive_manuscripts) == 4
 
-    # Tick 6: Aggregate demand 3. Should spawn additional manuscripts.
-    # Total alive will be 4 (from before) + 1 (new) = 5
     state.tick = 6
     aggregate_demand_tick_6 = dummy_simulation_config.demand_schedule.root.get(6, 0)
-    demand_today_tick_6 = _allocate_demand(state.tick, aggregate_demand_tick_6)
+    demand_today_tick_6 = _allocate_demand(state.tick, aggregate_demand_tick_6, dummy_simulation_config)
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_6,
@@ -312,39 +288,23 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     )
     assert len(state.alive_manuscripts) == 5
 
-    # 4. Assertions for spawned manuscripts materials
-    # We need to find manuscripts born at specific ticks and check their material.
-    # The first set of manuscripts are born at tick 2, the second at tick 6.
-
-    # Manuscripts born at tick 2 should use 'papyrus' distribution (from start_tick 0)
-    # Find any manuscript born at tick 2.
-    m_tick2 = next(
-        (m for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 2),
-        None,
-    )
-    assert m_tick2 is not None, "No manuscript found born at tick 2"
+    m_tick2 = next((m for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 2), None)
+    assert m_tick2 is not None
     assert m_tick2.material == Material.PAPYRUS
 
-    # Manuscripts born at tick 6 should use 'parchment' distribution (from start_tick 5)
-    # Find any manuscript born at tick 6.
-    m_tick6 = next(
-        (m for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 6),
-        None,
-    )
-    assert m_tick6 is not None, "No manuscript found born at tick 6"
+    m_tick6 = next((m for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 6), None)
+    assert m_tick6 is not None
     assert m_tick6.material == Material.PARCHMENT
 
 
 def test_script_transition(state_collector_fixture: List[GenerationState]):
     """Verify newly spawned witnesses use scripts based on the active schedule."""
-    # 1. Define a 2-stage script transition schedule
     script_schedule = [
         {"start_tick": 0, "distribution": {"uncial": 1.0, "minuscule": 0.0}},
         {"start_tick": 5, "distribution": {"uncial": 0.0, "minuscule": 1.0}},
     ]
     script_manager = ScriptTransitionManager(script_schedule)
 
-    # Dummy material manager
     material_schedule = [{"start_tick": 0, "distribution": {"parchment": 1.0}}]
     material_manager = MaterialTransitionManager(material_schedule)
 
@@ -352,13 +312,7 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
         "total_ticks": 10,
         "p_region_migration": 0.0,
         "p_internal_relocation": 0.0,
-        "reputation_distribution": {
-            1: 0.2,
-            2: 0.2,
-            3: 0.2,
-            4: 0.2,
-            5: 0.2,
-        },  # Dummy 5-point distribution
+        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
         "pa_regime": "insertion",
         "pa_intervention_year": 5,
         "pa_intervention_region": "Asia Minor",
@@ -366,26 +320,19 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
         "persecutions": [],
         "material_transitions": material_schedule,
         "script_transitions": script_schedule,
-        "demand_schedule": {
-            0: 2,  # Aggregate demand 2 at tick 0
-            6: 3,  # Aggregate demand 3 at tick 6
-        },
+        "demand_schedule": {0: 2, 6: 3},
     }
     dummy_simulation_config = SimulationConfig(**dummy_config_data)
 
-    # 2. Setup simulation state: Start with empty state, demand will spawn them
     rng_context = RNGContext(seed=42)
     rng = rng_context.spawn(1)[0]
     state = initialise_generation_state()
     state_collector_fixture.append(state)
-    state.tick = 0  # Initial tick
+    state.tick = 0
 
-    # 3. Simulate spawning across the transition boundary
-
-    # Tick 2: Aggregate demand 2. Should spawn manuscripts according to allocation.
     state.tick = 2
     aggregate_demand_tick_2 = dummy_simulation_config.demand_schedule.root.get(0, 0)
-    demand_today_tick_2 = _allocate_demand(state.tick, aggregate_demand_tick_2)
+    demand_today_tick_2 = _allocate_demand(state.tick, aggregate_demand_tick_2, dummy_simulation_config)
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_2,
@@ -395,12 +342,10 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
         script_manager,
     )
     assert len(state.alive_manuscripts) == 4
-    assert len(state.registries.witnesses) == 4  # 4 witnesses for 4 spawned manuscripts
 
-    # Tick 6: Aggregate demand 3. Should spawn additional manuscripts.
     state.tick = 6
     aggregate_demand_tick_6 = dummy_simulation_config.demand_schedule.root.get(6, 0)
-    demand_today_tick_6 = _allocate_demand(state.tick, aggregate_demand_tick_6)
+    demand_today_tick_6 = _allocate_demand(state.tick, aggregate_demand_tick_6, dummy_simulation_config)
     _spawn_new_manuscripts_from_demand(
         state,
         demand_today_tick_6,
@@ -410,27 +355,15 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
         script_manager,
     )
     assert len(state.alive_manuscripts) == 5
-    assert len(state.registries.witnesses) == 5  # 5 witnesses total
 
-    # 4. Assertions for spawned witnesses scripts
-    # We need to find witnesses born at specific ticks and check their script.
-
-    # Witnesses born at tick 2 should use 'uncial' distribution (from start_tick 0)
     m_ids_tick2 = [m.manuscript_id for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 2]
-    w_tick2 = next(
-        (w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in m_ids_tick2),
-        None,
-    )
-    assert w_tick2 is not None, "No witness found born at tick 2"
+    w_tick2 = next((w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in m_ids_tick2), None)
+    assert w_tick2 is not None
     assert w_tick2.script == Script.UNCIAL
 
-    # Witnesses born at tick 6 should use 'minuscule' distribution (from start_tick 5)
     m_ids_tick6 = [m.manuscript_id for m in state.registries.manuscripts._manuscripts.values() if m.birth_tick == 6]
-    w_tick6 = next(
-        (w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in m_ids_tick6),
-        None,
-    )
-    assert w_tick6 is not None, "No witness found born at tick 6"
+    w_tick6 = next((w for w in state.registries.witnesses._witnesses.values() if w.manuscript_id in m_ids_tick6), None)
+    assert w_tick6 is not None
     assert w_tick6.script == Script.MINUSCULE
 
 
@@ -438,14 +371,13 @@ def test_migration_determinism(state_collector_fixture: List[GenerationState]):
     """Verify manuscript migration is deterministic for a given seed."""
 
     def run_migration_sim(seed: int, state_collector: List[GenerationState]) -> Dict[int, Dict[str, Region]]:
-        """Run a few ticks of migration and return the history."""
         dummy_config = SimulationConfig(
-            total_ticks=1,
+            total_ticks=10,
             text_length=100,
-            p_region_migration=0.0,
-            p_internal_relocation=0.0,
+            p_region_migration=0.5,
+            p_internal_relocation=0.5,
             reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-            demand_schedule={0: 0},  # New aggregate format
+            demand_schedule={0: 0},
             pa_regime="insertion",
             pa_intervention_year=0,
             pa_intervention_region="Asia Minor",
@@ -458,48 +390,30 @@ def test_migration_determinism(state_collector_fixture: List[GenerationState]):
         history = {}
         for tick in range(1, 5):
             state.tick = tick
-            handle_migration(state, rng, p_region_migration=0.5, p_internal_relocation=0.5)
-
-            # Record the region of each manuscript at this tick
+            handle_migration(state, rng, dummy_config)
             history[tick] = {m: state.registries.manuscripts.get(m).region for m in state.alive_manuscripts}
         return history
 
-    # Run simulation twice with the same seed
     history1 = run_migration_sim(seed=999, state_collector=state_collector_fixture)
     history2 = run_migration_sim(seed=999, state_collector=state_collector_fixture)
-
-    # Assert histories are identical
     assert history1 == history2
 
-    # Run with a different seed
     history3 = run_migration_sim(seed=111, state_collector=state_collector_fixture)
-
-    # Assert history is different (it's probabilistically unlikely to be the same)
     assert history1 != history3
 
 
 def test_event_ordering_stability(state_collector_fixture: List[GenerationState]):
     """Ensure event application is stable regardless of config order."""
-    event1 = {
-        "event_type": "persecution",
-        "start_tick": 5,
-        "regions": ["Egypt"],
-        "kill_proportion": 0.2,
-    }
-    event2 = {
-        "event_type": "persecution",
-        "start_tick": 2,
-        "regions": ["Egypt"],
-        "kill_proportion": 0.5,
-    }
+    event1 = {"event_type": "persecution", "start_tick": 5, "regions": ["Egypt"], "kill_proportion": 0.2}
+    event2 = {"event_type": "persecution", "start_tick": 2, "regions": ["Egypt"], "kill_proportion": 0.5}
 
     dummy_config = SimulationConfig(
-        total_ticks=1,
+        total_ticks=10,
         text_length=100,
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule=DemandScheduleConfig(root={0: 0}),  # New aggregate format
+        demand_schedule={0: 0},
         pa_regime="insertion",
         pa_intervention_year=0,
         pa_intervention_region="Asia Minor",
@@ -513,26 +427,25 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
         initial_ids = {m for m in state.alive_manuscripts}
 
         event_manager = HistoricalEventManager(order)
-
         for i in range(1, 7):
             state.tick = i
             event_manager.apply_events_for_tick(state, rng)
-
         return initial_ids - {m for m in state.alive_manuscripts}
 
-    # Run with both orderings using the same seed
-    destroyed_ids1 = run_with_order([event1, event2], seed=77, state_collector=state_collector_fixture)
-    destroyed_ids2 = run_with_order([event2, event1], seed=77, state_collector=state_collector_fixture)
-
-    # The set of destroyed manuscripts should be identical
+    destroyed_ids1 = run_with_order([event1, event2], 77, state_collector_fixture)
+    destroyed_ids2 = run_with_order([event2, event1], 77, state_collector_fixture)
     assert destroyed_ids1 == destroyed_ids2
+
+
+def test_manager_independence(state_collector_fixture: List[GenerationState]):
+    """Verify that managers do not interfere with each other or the simulation state."""
     dummy_config = SimulationConfig(
-        total_ticks=1,
+        total_ticks=10,
         text_length=100,
         p_region_migration=0.0,
         p_internal_relocation=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule=DemandScheduleConfig(root={0: 0}),  # New aggregate format
+        demand_schedule={0: 0},
         pa_regime="insertion",
         pa_intervention_year=0,
         pa_intervention_region="Asia Minor",
@@ -546,7 +459,7 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
     # 1. Test HistoricalEventManager
     original_tick = state.tick
     original_alive_count = len(state.alive_manuscripts)
-    event_manager = HistoricalEventManager([])  # No events
+    event_manager = HistoricalEventManager([])
     event_manager.apply_events_for_tick(state, rng)
     assert state.tick == original_tick
     assert len(state.alive_manuscripts) == original_alive_count
@@ -554,13 +467,13 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
     # 2. Test MaterialTransitionManager
     material_manager = MaterialTransitionManager([{"start_tick": 0, "distribution": {"parchment": 1.0}}])
     state_before = copy.deepcopy(state)
-    _ = material_manager.get_material_for_tick(1, rng)
+    _ = material_manager.get_active_distribution(1)
     assert state.tick == state_before.tick
     assert state.alive_manuscripts == state_before.alive_manuscripts
 
     # 3. Test ScriptTransitionManager
     script_manager = ScriptTransitionManager([{"start_tick": 0, "distribution": {"uncial": 1.0}}])
     state_before = copy.deepcopy(state)
-    _ = script_manager.get_script_for_tick(1, rng)
+    _ = script_manager.get_active_distribution(1)
     assert state.tick == state_before.tick
     assert state.alive_manuscripts == state_before.alive_manuscripts

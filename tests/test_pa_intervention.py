@@ -33,7 +33,7 @@ def test_pa_intervention_insertion_regime(base_config_data):
 
     # Run demographic simulation
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     # Run text replay
@@ -62,7 +62,7 @@ def test_pa_intervention_omission_regime(base_config_data):
     config = SimulationConfig(**base_config_data)
 
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     engine = TextReplayEngine(config, snapshot, seed)
@@ -89,7 +89,7 @@ def test_pa_intervention_no_eligible_nodes(base_config_data):
     config = SimulationConfig(**base_config_data)
 
     rng = RNGContext(seed=123).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     with pytest.raises(RuntimeError) as excinfo:
@@ -103,7 +103,7 @@ def test_pa_intervention_determinism(base_config_data):
     config = SimulationConfig(**base_config_data)
 
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     engine1 = TextReplayEngine(config, snapshot, seed)
@@ -120,7 +120,7 @@ def test_pa_intervention_reputation_override(base_config_data):
 
     # Run demographic simulation
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     # Patch apply_scribal_rule to check reputation passed
@@ -145,7 +145,7 @@ def test_pa_intervention_integrity(base_config_data):
     config = SimulationConfig(**base_config_data)
 
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     # Record graph state before replay
@@ -170,7 +170,7 @@ def test_pa_intervention_exactly_once(base_config_data):
     config = SimulationConfig(**base_config_data)
 
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config.model_dump(), rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     engine = TextReplayEngine(config, snapshot, seed)

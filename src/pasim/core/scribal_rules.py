@@ -24,27 +24,22 @@ witness instance, which has been influenced by both its ancestry (contamination)
 and the scribal process itself (error).
 """
 
-from typing import Dict, List, Optional, TypeAlias
+from typing import List
 
 import numpy as np
-from numpy.typing import NDArray
 
 from pasim.config.schema import SimulationConfig
 from pasim.core.mutation import mutate_tagged_string
 from pasim.core.reputation import expected_mutation_proportion
 from pasim.core.transmission import copy_from_single_exemplar, majority_from_exemplars
 
-# Define a type alias for a tagged string (a NumPy array of int16)
-TaggedString: TypeAlias = NDArray[np.int16]
-
 
 def apply_scribal_rule(
-    exemplar_texts: List[TaggedString],
+    exemplar_texts: List[np.ndarray],
     rng: np.random.Generator,
     reputation: int,
     config: SimulationConfig,
-    mutation_mapping: Optional[Dict[int, float]] = None,
-) -> TaggedString:
+) -> np.ndarray:
     """
     Produces a new, copied and mutated tagged string from one or more exemplars.
 
@@ -60,21 +55,9 @@ def apply_scribal_rule(
         reputation: The integer reputation level (1-5) of the scribe/witness,
                     which determines the error intensity.
         config: The simulation configuration object.
-        mutation_mapping: An optional dictionary to override the default
-                          reputation-to-mutation-proportion mapping.
 
     Returns:
         A new tagged string representing the final, potentially mutated text.
-
-    Determinism:
-        This function is fully deterministic given the same inputs and the same
-        `rng` state.
-
-    Failure Conditions:
-        - Raises `ValueError` if `exemplar_texts` is empty.
-        - Raises `ValueError` if the provided `reputation` is invalid.
-        - Raises `ValueError` if the exemplar texts have inconsistent shapes
-          or dtypes (as enforced by the underlying transmission functions).
     """
     if not exemplar_texts:
         raise ValueError("Cannot apply scribal rule without at least one exemplar.")
@@ -86,7 +69,7 @@ def apply_scribal_rule(
         base_text = majority_from_exemplars(exemplar_texts, rng)
 
     # Stage 2: Error Intensity Determination
-    proportion = expected_mutation_proportion(reputation, mutation_mapping)
+    proportion = expected_mutation_proportion(reputation, config.reputation_mutation_mapping)
 
     # Stage 3: Mutation
     # RULE: If a manuscript does not have the PA (all segments are 0),

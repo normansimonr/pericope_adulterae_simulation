@@ -57,10 +57,10 @@ def test_sampling_eligibility():
     seed = 42
 
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(params, rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
-    result = sample_survivors(snapshot, seed, config.total_ticks)
+    result = sample_survivors(snapshot, seed, config.total_ticks, config)
 
     # Map for quick lookup
     node_map = {n.instance_id: n for n in snapshot.nodes}
@@ -78,11 +78,11 @@ def test_sampling_determinism():
     seed = 123
 
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(params, rng)
+    state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
-    res1 = sample_survivors(snapshot, seed, config.total_ticks)
-    res2 = sample_survivors(snapshot, seed, config.total_ticks)
+    res1 = sample_survivors(snapshot, seed, config.total_ticks, config)
+    res2 = sample_survivors(snapshot, seed, config.total_ticks, config)
 
     assert res1.sampled_witness_ids == res2.sampled_witness_ids
     assert res1.stratum_counts == res2.stratum_counts
@@ -146,8 +146,18 @@ def test_warning_behavior():
         )
 
     snapshot = GenealogySnapshot(nodes=nodes)
-    res = sample_survivors(snapshot, base_seed=1, total_ticks=1000)
+    config = SimulationConfig(
+        total_ticks=1000,
+        reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
+        pa_regime="insertion",
+        pa_intervention_year=300,
+        pa_intervention_region="Asia Minor",
+        pa_innovator_reputation=5.0,
+        demand_schedule={0: 10},
+    )
+    res = sample_survivors(snapshot, base_seed=1, total_ticks=1000, config=config)
 
     assert res.actual_sample_size == 10
     assert len(res.warnings) > 0
-    assert "AsiaMinor_650+" in res.deficit_per_stratum
+    # Boundary is 650 by default, focus is "Asia Minor"
+    assert "Asia Minor_650+" in res.deficit_per_stratum

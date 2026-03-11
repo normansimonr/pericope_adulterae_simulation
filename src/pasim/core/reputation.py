@@ -13,20 +13,9 @@ to undergo some form of mutation or error. This provides a configurable,
 deterministic intensity level that mutation operators can then consume.
 """
 
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
-
-# Define the default mapping from reputation level to expected mutation proportion.
-# Higher reputation (e.g., 5) implies a lower expected mutation proportion.
-# These values are placeholders and can be overridden by users.
-DEFAULT_REPUTATION_MAPPING: Dict[int, float] = {
-    1: 0.10,  # Very low reputation = 10% of segments expected to mutate
-    2: 0.10,  # Low reputation = 10%
-    3: 0.30,  # Medium reputation = 30%
-    4: 0.30,  # High reputation = 30%
-    5: 0.20,  # Very high reputation = 20%
-}
 
 
 def validate_reputation(reputation: int) -> None:
@@ -48,7 +37,7 @@ def validate_reputation(reputation: int) -> None:
         raise ValueError(f"Reputation must be an integer between 1 and 5 (inclusive), but got {reputation}.")
 
 
-def expected_mutation_proportion(reputation: int, mapping: Optional[Dict[int, float]] = None) -> float:
+def expected_mutation_proportion(reputation: int, mapping: Dict[int, float]) -> float:
     """
     Returns the expected proportion of segments that should mutate for a given reputation.
 
@@ -57,9 +46,7 @@ def expected_mutation_proportion(reputation: int, mapping: Optional[Dict[int, fl
 
     Args:
         reputation: The integer reputation level (1-5) of the witness.
-        mapping: An optional dictionary to override the default reputation
-                 to proportion mapping. If None, `DEFAULT_REPUTATION_MAPPING`
-                 will be used.
+        mapping: A dictionary mapping reputation (1-5) to proportion.
 
     Returns:
         A float representing the expected proportion of segments that will mutate,
@@ -70,21 +57,19 @@ def expected_mutation_proportion(reputation: int, mapping: Optional[Dict[int, fl
 
     Failure Conditions:
         - Raises `ValueError` if the provided `reputation` is invalid.
-        - Raises `ValueError` if the `reputation` is not found in the chosen mapping.
+        - Raises `ValueError` if the `reputation` is not found in the mapping.
         - Raises `ValueError` if the mapped proportion is not within [0.0, 1.0].
     """
     validate_reputation(reputation)
 
-    active_mapping = mapping if mapping is not None else DEFAULT_REPUTATION_MAPPING
-
-    if reputation not in active_mapping:
+    if reputation not in mapping:
         raise ValueError(f"Reputation level '{reputation}' not found in the mapping.")
 
-    proportion = active_mapping[reputation]
+    proportion = mapping[reputation]
 
     if not (0.0 <= proportion <= 1.0):
         raise ValueError(
-            f"Mapped mutation proportion '{proportion}' for reputation '{reputation}' " "is not within the valid range [0.0, 1.0]."
+            f"Mapped mutation proportion '{proportion}' for reputation '{reputation}' is not within the valid range [0.0, 1.0]."
         )
 
     return proportion

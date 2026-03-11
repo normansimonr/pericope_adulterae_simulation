@@ -44,7 +44,7 @@ Explicit Exclusions:
 import logging
 import time
 from math import ceil
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 import numpy as np
 from numpy.random import Generator as RNG
@@ -58,48 +58,30 @@ from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
-from pasim.core.spatial import REGION_BOUNDS, generate_random_coordinates
+from pasim.core.spatial import generate_random_coordinates
 from pasim.core.state import DeathReason, Manuscript, Region, Witness
 
 logger = logging.getLogger(__name__)
 
 
-# --- Regional Demand Allocation ---
-REGIONAL_DISTRIBUTIONS = {
-    # Centuries 0-2 (0-299 years)
-    (0, 2): {
-        Region.ASIA_MINOR: 0.70,
-        Region.LEVANT: 0.25,
-        Region.EGYPT: 0.05,
-    },
-    # Centuries 3-5 (300-599 years)
-    (3, 5): {
-        Region.ASIA_MINOR: 0.55,
-        Region.LEVANT: 0.25,
-        Region.EGYPT: 0.20,
-    },
-    # Century 6 onwards (>= 600 years)
-    (6, None): {  # None indicates "onwards"
-        Region.ASIA_MINOR: 1.00,
-        Region.LEVANT: 0.00,
-        Region.EGYPT: 0.00,
-    },
-}
-
-
-def _get_regional_distribution_for_century(century: int) -> Dict[Region, float]:
+def _get_regional_distribution_for_century(century: int, config: SimulationConfig) -> Dict[Region, float]:
     """Determines the appropriate regional distribution for a given century."""
-    for (start_century, end_century), distribution in REGIONAL_DISTRIBUTIONS.items():
-        if end_century is None:  # Century 6 onwards
-            if century >= start_century:
-                return distribution
-        elif start_century <= century <= end_century:
-            return distribution
-    # Default to the latest distribution if century is beyond defined ranges
-    return REGIONAL_DISTRIBUTIONS[(6, None)]
+    distributions = config.regional_demand_distributions
+
+    # Map century to the keys in distributions (0-2, 3-5, 6+)
+    target_key = "6+"
+    if 0 <= century <= 2:
+        target_key = "0-2"
+    elif 3 <= century <= 5:
+        target_key = "3-5"
+
+    dist_map = distributions.get(target_key, distributions.get("6+"))
+
+    # Map string keys to Region enum
+    return {Region(k): v for k, v in dist_map.items()}
 
 
-def _allocate_demand(tick: int, aggregate_demand: int) -> Dict[Region, int]:
+def _allocate_demand(tick: int, aggregate_demand: int, config: SimulationConfig) -> Dict[Region, int]:
     """
     Deterministically allocates aggregate demand across regions based on the
     century of the current tick, using ceiling rounding for each region.
@@ -107,6 +89,7 @@ def _allocate_demand(tick: int, aggregate_demand: int) -> Dict[Region, int]:
     Args:
         tick: The current simulation tick (1 tick = 1 year).
         aggregate_demand: The total demand for new manuscripts at this tick.
+        config: Simulation configuration.
 
     Returns:
         A dictionary mapping Region enums to allocated integer demand counts.
@@ -115,7 +98,7 @@ def _allocate_demand(tick: int, aggregate_demand: int) -> Dict[Region, int]:
         return {region: 0 for region in Region}
 
     century = tick // 100  # 1 tick = 1 year, so century = floor(tick / 100)
-    distribution = _get_regional_distribution_for_century(century)
+    distribution = _get_regional_distribution_for_century(century, config)
 
     regional_demand: Dict[Region, int] = {}
     for region, proportion in distribution.items():
@@ -161,8 +144,7 @@ def handle_deaths(state: GenerationState) -> GenerationState:
 def handle_migration(
     state: GenerationState,
     rng: RNG,
-    p_region_migration: float,
-    p_internal_relocation: float = 0.0,
+    config: SimulationConfig,
 ) -> GenerationState:
     """Handles the migration of manuscripts between and within regions.
 
@@ -174,14 +156,14 @@ def handle_migration(
     Args:
         state: The current simulation state.
         rng: The seeded random number generator.
-        p_region_migration: Probability of a manuscript migrating to a
-                            different region.
-        p_internal_relocation: Probability of a manuscript relocating within
-                               its current region.
+        config: The simulation configuration.
 
     Returns:
         The updated simulation state.
     """
+    p_region_migration = config.p_region_migration
+    p_internal_relocation = config.p_internal_relocation
+
     n_alive = len(state.alive_manuscripts)
     if n_alive == 0:
         return state
@@ -200,7 +182,7 @@ def handle_migration(
             if other_regions:
                 new_region = rng.choice(other_regions)
                 manuscript.region = new_region
-                manuscript.location = generate_random_coordinates(new_region, rng)
+                manuscript.location = generate_random_coordinates(new_region, rng, config)
 
                 # Update alive_by_region mapping
                 state.alive_by_region[old_region].remove(ms_id)
@@ -215,7 +197,7 @@ def handle_migration(
             relocating_ids = rng.choice(remaining_ids, size=n_relocate, replace=False).tolist()
             for ms_id in relocating_ids:
                 manuscript = state.registries.manuscripts.get(ms_id)
-                manuscript.location = generate_random_coordinates(manuscript.region, rng)
+                manuscript.location = generate_random_coordinates(manuscript.region, rng, config)
 
     return state
 
@@ -281,7 +263,11 @@ def _spawn_new_manuscripts_from_demand(
             region_kdtree = kdtree_by_region.get(region)
 
             # Vectorized generation for this batch
-            x_bounds, y_bounds = REGION_BOUNDS[region]
+            bounds = params.region_bounds.get(region.value)
+            if bounds is None:
+                raise ValueError(f"No bounds defined for region: {region.value}")
+            x_bounds, y_bounds = bounds[0], bounds[1]
+
             locations_x = rng.uniform(x_bounds[0], x_bounds[1], size=n_to_spawn)
             locations_y = rng.uniform(y_bounds[0], y_bounds[1], size=n_to_spawn)
 
@@ -302,7 +288,7 @@ def _spawn_new_manuscripts_from_demand(
                 if np.any(mask):
                     from .lifespan import _get_lognormal_params
 
-                    mu, sigma = _get_lognormal_params(mat, region)
+                    mu, sigma = _get_lognormal_params(mat, region, params)
                     lifespans = rng.lognormal(mean=mu, sigma=sigma, size=np.sum(mask))
                     batch_lifespans[mask] = np.maximum(1, np.floor(lifespans)).astype(int)
 
@@ -334,6 +320,7 @@ def _spawn_new_manuscripts_from_demand(
                     graph=state.graph,
                     manuscript_to_instance_map=state.manuscript_to_instance_map,
                     rng=rng,
+                    config=params,
                     kdtree=region_kdtree,  # Pass the pre-built KDTree
                     reputation_cache=state.instance_reputations,
                 )
@@ -375,7 +362,7 @@ def _spawn_new_manuscripts_from_demand(
                             raise ValueError("No alive instances to select parents from.")
 
                         # Determine number of parents (1-3), replicating logic from exemplar_selection
-                        num_parents_choice = rng.choice([1, 2, 3], p=[0.8, 0.1, 0.1])
+                        num_parents_choice = rng.choice([1, 2, 3], p=params.parent_num_distribution)
                         # Ensure we don't try to pick more parents than available
                         num_parents = min(num_parents_choice, len(all_alive_instance_ids))
 
@@ -460,8 +447,7 @@ def advance_tick(
     state = handle_migration(
         state=state,
         rng=rng,
-        p_region_migration=params.p_region_migration,
-        p_internal_relocation=params.p_internal_relocation,
+        config=params,
     )
 
     # 4. Spawn new manuscripts based on demand (mechanistic)
@@ -536,7 +522,7 @@ def extract_genealogy_snapshot(state: GenerationState) -> GenealogySnapshot:
     return GenealogySnapshot(nodes=nodes)
 
 
-def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationState:
+def run_genealogy_generator(config: Union[SimulationConfig, Dict[str, Any]], rng: RNG) -> GenerationState:
     """High-level orchestration entry point for genealogy generation.
 
     This function drives the entire deterministic, tick-based process of
@@ -544,21 +530,21 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
     state and then iterates through the specified number of ticks, calling
     `advance_tick` for each step.
 
-    The generation process is deterministic: given the same `parameters` and a
+    The generation process is deterministic: given the same `config` and an
     identically-seeded `rng`, it will always produce the exact same genealogy.
 
     Args:
-        parameters (Dict[str, Any]): A dictionary of simulation parameters,
-                                     validated against `SimulationConfig`.
+        config (Union[SimulationConfig, Dict[str, Any]]): The simulation configuration.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
 
     Returns:
-        nx.DiGraph: The final generated genealogy graph, where nodes represent
-                    witness instances and edges represent copying events.
+        GenerationState: The final generated simulation state, including the
+                        genealogy graph and registries.
     """
-    # 1. Validate and structure parameters
-    config = SimulationConfig(**parameters)
+    # 1. Initialize config if it's a dict
+    if isinstance(config, dict):
+        config = SimulationConfig(**config)
 
     # 2. Initialize state and managers
     state = initialise_generation_state()
@@ -590,7 +576,7 @@ def run_genealogy_generator(parameters: Dict[str, Any], rng: RNG) -> GenerationS
                 aggregate_demand_for_tick = config.demand_schedule.root[earliest_tick]
 
         # Allocate aggregate demand to regions
-        demand_today = _allocate_demand(current_tick, aggregate_demand_for_tick)
+        demand_today = _allocate_demand(current_tick, aggregate_demand_for_tick, config)
 
         state = advance_tick(
             state=state,

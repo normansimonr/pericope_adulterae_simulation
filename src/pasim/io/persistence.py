@@ -321,7 +321,9 @@ def save_demographics(result: "SimulationResult", run_dir: Path, params_path: Pa
     _save_manuscripts(run_dir, result)
     _save_telemetry(run_dir, result)
     _save_events_log(run_dir, result)
-    save_sampling_results(result.survivor_sampling_result, run_dir)
+
+    target_total = result.config.survivor_sampling_targets.get("target_total", 3000)
+    save_sampling_results(result.survivor_sampling_result, run_dir, target_total=target_total)
 
 
 def save_replay(result: "SimulationResult", run_dir: Path, regime_name: str):

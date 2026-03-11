@@ -5,6 +5,7 @@ This file contains shared fixtures and configuration for the pytest framework.
 from typing import Generator, List
 
 import pytest
+
 from pasim.analysis.text_view import print_textual_diffs
 from pasim.core.simulation_state import GenerationState
 

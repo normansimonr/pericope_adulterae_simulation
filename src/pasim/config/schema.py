@@ -28,7 +28,7 @@ are configured separately:
     input to the simulation's core spawning logic.
 """
 
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -123,6 +123,13 @@ class DemandScheduleConfig(RootModel[Dict[int, int]]):
         return self
 
 
+class LifespanConfig(BaseModel):
+    """Configuration for lognormal lifespan parameters."""
+
+    mu: float
+    sigma: float
+
+
 class SimulationConfig(BaseModel):
     """Root model for the entire simulation configuration."""
 
@@ -131,6 +138,77 @@ class SimulationConfig(BaseModel):
     p_region_migration: float = Field(0.0, ge=0.0, le=1.0)
     p_internal_relocation: float = Field(0.0, ge=0.0, le=1.0)
     reputation_distribution: Dict[int, float]
+
+    # Lifespan parameters (Material -> Region -> LifespanConfig)
+    lifespan_parameters: Dict[str, Dict[str, LifespanConfig]] = Field(
+        default={
+            "papyrus": {
+                "Asia Minor": {"mu": 4.72, "sigma": 0.30},
+                "Levant": {"mu": 4.72, "sigma": 0.30},
+                "Egypt": {"mu": 5.12, "sigma": 0.60},
+            },
+            "parchment": {
+                "Asia Minor": {"mu": 5.5, "sigma": 0.5},
+                "Levant": {"mu": 5.5, "sigma": 0.5},
+                "Egypt": {"mu": 6.0, "sigma": 0.5},
+            },
+            "paper": {
+                "Asia Minor": {"mu": 5.0, "sigma": 0.5},
+                "Levant": {"mu": 5.0, "sigma": 0.5},
+                "Egypt": {"mu": 5.5, "sigma": 0.5},
+            },
+        }
+    )
+
+    # Region bounds (Region -> [[xmin, xmax], [ymin, ymax]])
+    region_bounds: Dict[str, List[List[float]]] = Field(
+        default={
+            "Asia Minor": [[0.0, 100.0], [0.0, 100.0]],
+            "Egypt": [[200.0, 300.0], [200.0, 300.0]],
+            "Levant": [[400.0, 500.0], [400.0, 500.0]],
+        }
+    )
+
+    # New configurable mappings and targets
+    reputation_mutation_mapping: Dict[int, float] = Field(
+        default={
+            1: 0.10,
+            2: 0.10,
+            3: 0.30,
+            4: 0.30,
+            5: 0.20,
+        }
+    )
+
+    survivor_sampling_targets: Dict[str, Any] = Field(
+        default={
+            "target_total": 3000,
+            "target_born_650_or_later": 2400,
+            "target_born_earlier": 600,
+            "proportion_asia_minor": 0.98,
+            "sampling_seed_offset": 999999,
+            "eligibility_min_tick": 300,
+            "strata_boundary_tick": 650,
+            "strata_focus_region": "Asia Minor",
+        }
+    )
+
+    regional_demand_distributions: Dict[str, Dict[str, float]] = Field(
+        default={
+            "0-2": {"Asia Minor": 0.70, "Levant": 0.25, "Egypt": 0.05},
+            "3-5": {"Asia Minor": 0.55, "Levant": 0.25, "Egypt": 0.20},
+            "6+": {"Asia Minor": 1.00, "Levant": 0.00, "Egypt": 0.00},
+        }
+    )
+
+    parent_num_distribution: List[float] = Field(
+        default=[0.8, 0.1, 0.1],  # Probabilities for 1, 2, 3 parents
+        min_length=3,
+        max_length=3,
+    )
+
+    geographical_candidate_pool_size: int = Field(10, ge=1)
+    pa_intervention_radius: float = Field(10.0, ge=0.0)
 
     persecutions: List[PersecutionEventConfig] = []
     material_transitions: List[MaterialTransitionConfig] = []
@@ -147,6 +225,13 @@ class SimulationConfig(BaseModel):
 
     # Execution / Persistence Configuration
     persistence_level: Literal["minimal", "full"] = "minimal"
+
+    @field_validator("parent_num_distribution")
+    @classmethod
+    def validate_parent_dist(cls, v):
+        if not abs(sum(v) - 1.0) < 1e-9:
+            raise ValueError("parent_num_distribution must sum to 1.0")
+        return v
 
     @model_validator(mode="after")
     def validate_pa_intervention_year(self):

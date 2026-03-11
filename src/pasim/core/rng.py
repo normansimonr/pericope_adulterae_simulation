@@ -28,12 +28,12 @@ produced by this factory as part of their simulation's context.
 """
 
 from typing import List, Optional
-from numpy.random import Generator
 
 import numpy as np
-
+from numpy.random import Generator
 
 RNG = Generator
+
 
 class RNGContext:
     """

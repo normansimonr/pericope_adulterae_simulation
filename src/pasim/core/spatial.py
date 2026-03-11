@@ -1,48 +1,46 @@
 """
-Utilities for handling spatial assignments of manuscripts.
+This module provides utility functions for managing spatial assignments of
+manuscripts within the simulation.
 
-This module provides functions for assigning region-specific coordinates to
-manuscripts. It enforces the architectural principle that spatial properties
-belong to the physical manuscript and not to the abstract genealogy graph.
+Key Principles:
+- Geographical properties are associated with the physical `Manuscript` objects,
+  not the abstract genealogy nodes.
+- Regions are independent planar (x, y) coordinate spaces. Coordinates are not
+  comparable across regions (e.g., (50, 50) in Asia Minor is not geographically
+  related to (50, 50) in Egypt).
 """
 
 from typing import Tuple
 
-from numpy.random import Generator as RNG
+import numpy as np
 
+from pasim.config.schema import SimulationConfig
 from pasim.core.state import Region
 
-# Bounding boxes for each geographical region, defining independent planar spaces.
-# Coordinates are not comparable across regions.
-# Format: {Region: ((xmin, xmax), (ymin, ymax))}
-REGION_BOUNDS = {
-    Region.ASIA_MINOR: ((0.0, 100.0), (0.0, 100.0)),
-    Region.EGYPT: ((200.0, 300.0), (200.0, 300.0)),
-    Region.LEVANT: ((400.0, 500.0), (400.0, 500.0)),
-}
 
-
-def generate_random_coordinates(region: Region, rng: RNG) -> Tuple[float, float]:
-    """Generates a random (x, y) coordinate within the bounds of a given region.
-
-    This function ensures that manuscript locations are deterministically generated
-    and scoped to their assigned region's independent planar space.
+def generate_random_coordinates(region: Region, rng: np.random.Generator, config: SimulationConfig) -> Tuple[float, float]:
+    """
+    Generates a random (x, y) coordinate within the bounds of a given region,
+    using boundaries defined in the simulation configuration.
 
     Args:
-        region: The geographical region for which to generate coordinates.
-        rng: The seeded random number generator to ensure reproducibility.
+        region (Region): The geographical region.
+        rng (np.random.Generator): The random number generator.
+        config (SimulationConfig): The simulation configuration containing region bounds.
 
     Returns:
-        A tuple containing the (x, y) coordinates.
-
-    Raises:
-        ValueError: If the provided region is not defined in REGION_BOUNDS.
+        Tuple[float, float]: The generated (x, y) coordinates.
     """
-    if region not in REGION_BOUNDS:
-        raise ValueError(f"Region '{region}' does not have defined coordinate bounds.")
+    region_name = region.value
+    bounds = config.region_bounds.get(region_name)
 
-    x_bounds, y_bounds = REGION_BOUNDS[region]
+    if bounds is None:
+        raise ValueError(f"No bounds defined for region: {region_name}")
+
+    x_bounds = bounds[0]
+    y_bounds = bounds[1]
+
     x = rng.uniform(x_bounds[0], x_bounds[1])
     y = rng.uniform(y_bounds[0], y_bounds[1])
 
-    return x, y
+    return (x, y)

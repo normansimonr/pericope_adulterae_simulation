@@ -35,6 +35,7 @@ import numpy as np
 from numpy.random import Generator as RNG
 from scipy.spatial import KDTree
 
+from pasim.config.schema import SimulationConfig
 from pasim.core.genealogy import GenealogyGraph
 from pasim.core.state import Manuscript
 
@@ -48,6 +49,7 @@ def select_exemplars(
     graph: GenealogyGraph,
     manuscript_to_instance_map: Dict[str, WitnessInstanceID],
     rng: RNG,
+    config: SimulationConfig,
     kdtree: Optional[KDTree] = None,
     reputation_cache: Optional[Dict[WitnessInstanceID, float]] = None,
 ) -> List[WitnessInstanceID]:
@@ -62,6 +64,7 @@ def select_exemplars(
         manuscript_to_instance_map: A mapping from manuscript IDs to their
                                     corresponding witness instance IDs in the graph.
         rng: The seeded random number generator.
+        config: The simulation configuration.
         kdtree: An optional pre-built KDTree for the `alive_manuscripts_in_region`.
         reputation_cache: An optional dictionary mapping instance IDs to reputations.
 
@@ -71,7 +74,7 @@ def select_exemplars(
     if not alive_manuscripts_in_region:
         return []
 
-    # 1. Geographical Filtering: Find 10 closest manuscripts using KDTree
+    # 1. Geographical Filtering: Find closest manuscripts using KDTree
     # Use provided KDTree or build a new one if not provided
     if kdtree is None:
         locations = np.array([ms.location for ms in alive_manuscripts_in_region])
@@ -79,8 +82,8 @@ def select_exemplars(
     else:
         tree = kdtree
 
-    # Query for 10 nearest neighbors. k can be less than 10 if there are fewer manuscripts.
-    k = min(10, len(alive_manuscripts_in_region))
+    # Query for nearest neighbors.
+    k = min(config.geographical_candidate_pool_size, len(alive_manuscripts_in_region))
     distances, indices = tree.query(new_manuscript.location, k=k)
 
     # Handle the case where k=1, which returns a single index instead of an array
@@ -99,7 +102,7 @@ def select_exemplars(
         candidate_instances.sort(key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True)
 
     # 4. Determine number of exemplars
-    n = rng.choice([1, 2, 3], p=[0.8, 0.1, 0.1])
+    n = rng.choice([1, 2, 3], p=config.parent_num_distribution)
     n = min(n, len(candidate_instances))
 
     # 5. Final Selection

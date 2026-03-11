@@ -1,0 +1,2 @@
+description = "Commits and pushes."
+prompt = "Run ruff format with autofix, then update project_overview.md if needed; then commit with a comprehensive commit message and push. Do not use backticks in the commit message as they cause escaping issues with my terminal."
