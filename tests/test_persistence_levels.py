@@ -59,16 +59,25 @@ def test_minimal_persistence(experiment_dir):
     # Check results.csv content
     with open(experiment_dir / "results.csv", "r") as f:
         reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
         rows = list(reader)
         # 2 runs * 2 regimes = 4 rows
         assert len(rows) == 4
         # Verify columns
-        for row in rows:
-            assert "run_id" in row
-            assert "run_seed" in row
-            assert "regime" in row
-            assert "total_manuscripts_spawned" in row
-            assert "majority_text" in row
+        expected_fields = [
+            "run_id",
+            "run_seed",
+            "regime",
+            "total_manuscripts_spawned",
+            "majority_text",
+            "pct_sampled_witnesses_with_pa",
+            "pct_majority_disagree_autograph",
+            "pct_all_witnesses_with_pa",
+            "ideal_majority_text",
+            "pct_ideal_majority_disagree_autograph",
+        ]
+        for field in expected_fields:
+            assert field in fieldnames
 
 
 def test_full_persistence(experiment_dir):
@@ -106,7 +115,7 @@ def test_majority_text_string_serialization():
 
 
 def test_empty_survivor_aggregation(tmp_path, monkeypatch):
-    """Verify row contains majority_text = "" when zero witnesses survive."""
+    """Verify row contains expected values when zero witnesses survive."""
     exp_dir = tmp_path / "experiments" / "test_empty"
     exp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -114,6 +123,8 @@ def test_empty_survivor_aggregation(tmp_path, monkeypatch):
     config_data["total_ticks"] = 100
     config_data["pa_intervention_year"] = 1
     config_data["n_runs"] = 1
+    # Ensure no one is sampled
+    config_data["survivor_sampling_targets"] = {"target_total": 0, "eligibility_min_tick": 300}
 
     p = exp_dir / "params.yaml"
     p.write_text(yaml.dump(config_data))
@@ -130,6 +141,12 @@ def test_empty_survivor_aggregation(tmp_path, monkeypatch):
         assert len(rows) == 2  # 1 run * 2 regimes
         for row in rows:
             assert row["majority_text"] == ""
+            assert row["pct_sampled_witnesses_with_pa"] == ""
+            assert row["pct_majority_disagree_autograph"] == ""
+            # All-witness metrics should still be present
+            assert row["pct_all_witnesses_with_pa"] != ""
+            assert row["ideal_majority_text"] != ""
+            assert row["pct_ideal_majority_disagree_autograph"] != ""
 
 
 def test_parallel_aggregation_determinism(experiment_dir):
@@ -151,3 +168,41 @@ def test_parallel_aggregation_determinism(experiment_dir):
     assert rows[2]["regime"] == "insertion"
     assert rows[3]["run_id"] == "1"
     assert rows[3]["regime"] == "omission"
+
+
+def test_metrics_values_range(experiment_dir):
+    """Verify that percentage metrics are between 0 and 1."""
+    params_path = experiment_dir / "params.yaml"
+    run_experiment(params_path, persistence_level="minimal")
+
+    results_path = experiment_dir / "results.csv"
+    with open(results_path, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            for field in [
+                "pct_sampled_witnesses_with_pa",
+                "pct_majority_disagree_autograph",
+                "pct_all_witnesses_with_pa",
+                "pct_ideal_majority_disagree_autograph",
+            ]:
+                if row[field] != "":
+                    val = float(row[field])
+                    assert 0.0 <= val <= 1.0
+
+
+def test_ideal_majority_text_format(experiment_dir):
+    """Verify ideal_majority_text is a string of digits and matches text_length."""
+    params_path = experiment_dir / "params.yaml"
+    with open(params_path, "r") as f:
+        config = yaml.safe_load(f)
+    text_length = config["text_length"]
+
+    run_experiment(params_path, persistence_level="minimal")
+
+    results_path = experiment_dir / "results.csv"
+    with open(results_path, "r") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            ideal_maj = row["ideal_majority_text"]
+            assert len(ideal_maj) == text_length
+            assert ideal_maj.isdigit()

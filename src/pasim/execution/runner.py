@@ -36,6 +36,11 @@ class ReplayResult:
     seed: int
     innovator_id: str
     majority_text_segments: List[int]
+    pct_sampled_witnesses_with_pa: Optional[float] = None
+    pct_majority_disagree_autograph: Optional[float] = None
+    pct_all_witnesses_with_pa: Optional[float] = None
+    ideal_majority_text_segments: Optional[List[int]] = None
+    pct_ideal_majority_disagree_autograph: Optional[float] = None
 
 
 @dataclass
@@ -133,9 +138,54 @@ def _run_regime_replay(
     replay_engine = TextReplayEngine(regime_config, snapshot, replay_seed)
     replayed_texts = replay_engine.run()
 
+    # Identifiers
     survivor_ids = result.survivor_sampling_result.sampled_witness_ids
+    all_witness_ids = list(replayed_texts.keys())
+    # The autograph is the only node with no parents
+    autograph_id = next(n.instance_id for n in snapshot.nodes if not n.parent_ids)
+    ideal_witness_ids = [wid for wid in all_witness_ids if wid != autograph_id]
+
+    # Genomes
     survivor_genomes = [replayed_texts[sid] for sid in survivor_ids if sid in replayed_texts]
+    all_genomes = list(replayed_texts.values())
+    ideal_genomes = [replayed_texts[wid] for wid in ideal_witness_ids]
+
+    # Majority texts
     majority_segments = compute_majority_text(survivor_genomes)
+    ideal_majority_segments = compute_majority_text(ideal_genomes)
+
+    # Autograph for comparison
+    autograph_text = replayed_texts[autograph_id]
+    text_length = config.text_length
+
+    # Metrics
+    # 1. Percent of Sampled Witnesses Containing the PA
+    pct_sampled_with_pa = None
+    if survivor_genomes:
+        count_sampled_with_pa = sum(1 for g in survivor_genomes if np.any(g != 0))
+        pct_sampled_with_pa = count_sampled_with_pa / len(survivor_genomes)
+
+    # 2. Percent of Majority Text Segments Disagreeing with the Autograph
+    pct_majority_disagree = None
+    if majority_segments:
+        majority_array = np.array(majority_segments, dtype=np.int16)
+        disagree_count = np.sum(majority_array != autograph_text)
+        pct_majority_disagree = disagree_count / text_length
+
+    # 3. Percent of All Witnesses That Contain the PA
+    pct_all_with_pa = None
+    if all_genomes:
+        count_all_with_pa = sum(1 for g in all_genomes if np.any(g != 0))
+        pct_all_with_pa = count_all_with_pa / len(all_genomes)
+
+    # 4. Ideal Majority Text - computed above as ideal_majority_segments
+
+    # 5. Percent of Ideal Majority Segments Disagreeing with the Autograph
+    pct_ideal_majority_disagree = None
+    if ideal_majority_segments:
+        ideal_majority_array = np.array(ideal_majority_segments, dtype=np.int16)
+        ideal_disagree_count = np.sum(ideal_majority_array != autograph_text)
+        pct_ideal_majority_disagree = ideal_disagree_count / text_length
 
     result.replays[regime] = ReplayResult(
         pa_regime=regime,
@@ -143,6 +193,11 @@ def _run_regime_replay(
         seed=replay_seed,
         innovator_id=replay_engine.innovator_id,
         majority_text_segments=majority_segments,
+        pct_sampled_witnesses_with_pa=pct_sampled_with_pa,
+        pct_majority_disagree_autograph=pct_majority_disagree,
+        pct_all_witnesses_with_pa=pct_all_with_pa,
+        ideal_majority_text_segments=ideal_majority_segments,
+        pct_ideal_majority_disagree_autograph=pct_ideal_majority_disagree,
     )
 
     if persistence_level == "full" and run_dir:
@@ -155,6 +210,11 @@ def _run_regime_replay(
         regime=regime,
         total_manuscripts_spawned=len(snapshot.nodes),
         majority_text_segments=majority_segments,
+        pct_sampled_witnesses_with_pa=pct_sampled_with_pa,
+        pct_majority_disagree_autograph=pct_majority_disagree,
+        pct_all_witnesses_with_pa=pct_all_with_pa,
+        ideal_majority_text_segments=ideal_majority_segments,
+        pct_ideal_majority_disagree_autograph=pct_ideal_majority_disagree,
     )
 
 

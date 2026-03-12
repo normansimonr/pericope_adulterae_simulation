@@ -13,7 +13,18 @@ def aggregate_results(experiment_root: Path):
         return
 
     all_rows = []
-    fieldnames = ["run_id", "run_seed", "regime", "total_manuscripts_spawned", "majority_text"]
+    fieldnames = [
+        "run_id",
+        "run_seed",
+        "regime",
+        "total_manuscripts_spawned",
+        "majority_text",
+        "pct_sampled_witnesses_with_pa",
+        "pct_majority_disagree_autograph",
+        "pct_all_witnesses_with_pa",
+        "ideal_majority_text",
+        "pct_ideal_majority_disagree_autograph",
+    ]
 
     for file_path in temp_dir.glob("run_*.csv"):
         with open(file_path, "r", newline="") as f:

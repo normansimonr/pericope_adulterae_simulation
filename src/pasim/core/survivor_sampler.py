@@ -102,6 +102,9 @@ def _categorize_into_strata(eligible_nodes: list, targets_config: dict, names: D
 
 def _calculate_target_allocation(target_total: int, targets_config: dict, names: Dict[str, str]) -> Dict[str, int]:
     """Calculates the target number of witnesses to sample from each stratum."""
+    if target_total == 0:
+        return {name: 0 for name in names.values()}
+
     target_650_plus = targets_config.get("target_born_650_or_later", 2400)
     target_born_earlier = targets_config.get("target_born_earlier", 600)
     proportion_am = targets_config.get("proportion_asia_minor", 0.98)

@@ -346,14 +346,21 @@ This core distinction—shocks that alter existing state versus environments tha
 
 This module provides the worker-side logic for writing temporary, parallel-safe simulation results.
 
--   **`write_temp_result`**: Writes a single-row CSV file for a specific run and regime into a temporary directory. This avoids write contention during parallel execution.
+-   **`write_temp_result`**: Writes a single-row CSV file for a specific run and regime into a temporary directory. This avoids write contention during parallel execution. It now includes additional analytical metrics:
+    -   `run_id`, `run_seed`, `regime`, `total_manuscripts_spawned`.
+    -   `majority_text`: The consensus genome of sampled survivors.
+    -   `pct_sampled_witnesses_with_pa`: Percent of sampled witnesses containing at least one non-zero segment.
+    -   `pct_majority_disagree_autograph`: Percent of majority text segments differing from the autograph.
+    -   `pct_all_witnesses_with_pa`: Percent of all witness instances in the genealogy containing the PA.
+    -   `ideal_majority_text`: Consensus genome computed from all witness instances (excluding the autograph).
+    -   `pct_ideal_majority_disagree_autograph`: Percent of ideal majority text segments differing from the autograph.
 -   **`serialize_majority_text`**: Converts a majority text genome (list of integers) into a compact string representation, preserving leading zeros and handling empty survivor sets.
 
 ### `src/pasim/io/results_aggregator.py`
 
 This module implements the final aggregation step for Monte Carlo experiments.
 
--   **`aggregate_results`**: Scans the temporary results directory, merges all individual run rows into a single `results.csv` file at the experiment root, sorts them deterministically by `run_id` and regime, and cleans up the temporary files.
+-   **`aggregate_results`**: Scans the temporary results directory, merges all individual run rows into a single `results.csv` file at the experiment root, sorts them deterministically by `run_id` and regime (using a field list including the new analytical metrics), and cleans up the temporary files.
 
 ### `src/pasim/io/formats.py`
     -   `output.py`: For writing simulation outputs.
