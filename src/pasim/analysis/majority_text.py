@@ -1,5 +1,4 @@
 import json
-from collections import Counter
 from pathlib import Path
 from typing import Iterable, List
 
@@ -19,22 +18,23 @@ def compute_majority_text(genomes: Iterable[np.ndarray]) -> List[int]:
 
     # All genomes are assumed to have the same length
     text_length = len(genome_list[0])
-    majority_segments = []
 
     # Stack the genomes into a 2D array: rows = witnesses, columns = segments
     # This allows efficient segment-wise processing.
     collation = np.vstack(genome_list)
+    majority_segments = []
 
+    # Optimized segment-wise mode calculation using np.bincount
+    # np.bincount is very fast for small non-negative integers.
+    # Our segments use [0, 5], fitting this perfectly.
     for i in range(text_length):
-        segment_readings = collation[:, i]
-        # Counter provides counts of each reading
-        counts = Counter(segment_readings)
-        # Find the maximum frequency
-        max_freq = max(counts.values())
-        # Find all readings that share the maximum frequency
-        modes = [reading for reading, freq in counts.items() if freq == max_freq]
-        # Tie-break: choose the smallest value
-        majority_segments.append(int(min(modes)))
+        column = collation[:, i]
+        counts = np.bincount(column)
+        max_freq = np.max(counts)
+        # Find all indices that share the max frequency
+        modes = np.where(counts == max_freq)[0]
+        # Tie-break: min(modes) is the first index in the returned array
+        majority_segments.append(int(modes[0]))
 
     return majority_segments
 

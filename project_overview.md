@@ -177,6 +177,7 @@ Immediately after persisting the sampled witnesses for a given regime, the simul
 
 -   **Alignment**: All sampled witnesses are aligned segment-by-segment.
 -   **Mode Reading**: For each segment, the most frequent value (mode) across all survivors is chosen as the "majority" reading.
+-   **Performance**: Optimized using `np.bincount` for rapid segment-wise mode calculation even across tens of thousands of witness instances.
 -   **Deterministic Tie-Breaking**: If multiple readings are tied for the highest frequency, the numerically smallest value is chosen to ensure perfect reproducibility.
 -   **Output**: The resulting majority text is saved as `majority_text.json` within the regime's directory, providing a concise summary of the surviving textual tradition.
 
