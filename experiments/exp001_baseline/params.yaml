@@ -20,7 +20,7 @@ persecutions:
     regions:
       - "Asia Minor"
       - "Egypt"
-      - "Syria-Palestine"
+      - "Levant"
     kill_proportion: 0.15
 material_transitions:
   - start_tick: 0
