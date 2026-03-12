@@ -30,8 +30,21 @@ def aggregate_results(experiment_root: Path):
         with open(file_path, "r", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # Convert run_id to int for proper sorting
+                # Convert numeric fields back to their proper types so they are not quoted by QUOTE_NONNUMERIC
                 row["run_id"] = int(row["run_id"])
+                row["run_seed"] = int(row["run_seed"])
+                row["total_manuscripts_spawned"] = int(row["total_manuscripts_spawned"])
+
+                # Handle optional float fields
+                for field in [
+                    "pct_sampled_witnesses_with_pa",
+                    "pct_majority_disagree_autograph",
+                    "pct_all_witnesses_with_pa",
+                    "pct_ideal_majority_disagree_autograph",
+                ]:
+                    if row[field] != "":
+                        row[field] = float(row[field])
+
                 all_rows.append(row)
 
     # Sort by run_id, then regime
@@ -39,7 +52,7 @@ def aggregate_results(experiment_root: Path):
 
     output_path = experiment_root / "results.csv"
     with open(output_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_NONNUMERIC)
         writer.writeheader()
         writer.writerows(all_rows)
 

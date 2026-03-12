@@ -190,6 +190,28 @@ def test_metrics_values_range(experiment_dir):
                     assert 0.0 <= val <= 1.0
 
 
+def test_csv_quoting_integrity(experiment_dir):
+    """Verify that strings like majority_text are quoted in the final results.csv."""
+    params_path = experiment_dir / "params.yaml"
+    run_experiment(params_path, persistence_level="minimal")
+
+    results_path = experiment_dir / "results.csv"
+    with open(results_path, "r") as f:
+        content = f.read()
+
+    # The majority text in our base config is 10 segments.
+    # insertion regime with no mutations yet usually yields 0000000000
+    # In CSV it should appear as "0000000000"
+    assert '"0000000000"' in content
+
+    import re
+
+    # Pattern for start of row:
+    # run_id (digit), run_seed (digit), regime (quoted string), spawned (digit), majority_text (quoted string)
+    # e.g., 0,2136330837,"insertion",14265,"0000000000"
+    assert re.search(r'\d+,\d+,"[a-z]+",\d+,"\d+"', content)
+
+
 def test_ideal_majority_text_format(experiment_dir):
     """Verify ideal_majority_text is a string of digits and matches text_length."""
     params_path = experiment_dir / "params.yaml"

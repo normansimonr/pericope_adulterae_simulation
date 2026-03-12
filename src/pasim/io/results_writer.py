@@ -53,7 +53,7 @@ def write_temp_result(
     ]
 
     with open(file_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_NONNUMERIC)
         writer.writeheader()
         writer.writerow({
             "run_id": run_id,
