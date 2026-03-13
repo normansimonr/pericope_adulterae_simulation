@@ -5,7 +5,7 @@ seed: null
 text_length: 100
 p_region_migration: 0.01
 p_internal_relocation: 0.04
-p_uncial_exemplar_death_on_minuscule_birth: 0.1
+p_uncial_exemplar_death_on_minuscule_birth: 0.3
 reputation_distribution:
   1: 0.1
   2: 0.1
