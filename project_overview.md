@@ -61,6 +61,7 @@ The simulation is designed to be fully parameter-driven, allowing researchers to
 -   **Historical Drivers**: The configuration schema makes a clear distinction between three types of historical drivers:
     1.  **Historical Shocks** (e.g., `persecutions`): Discrete, instantaneous events that "shock" the system, such as a persecution that destroys a fraction of manuscripts at a specific time.
     2.  **Environmental Regimes** (e.g., `material_transitions`, `script_transitions`): Long-term, evolving environmental conditions that affect the properties of **newly created** entities. This is used to model gradual shifts in technology or culture.
+        *   `p_uncial_exemplar_death_on_minuscule_birth`: A probability (0.0 to 1.0) that an Uncial parent manuscript is "killed" (removed from the alive pool) when a Minuscule child is born, modeling cultural replacement.
     3.  **Structural Drivers** (e.g., `demand_schedule`): Core inputs that drive the simulation's fundamental mechanics.
         *   `demand_schedule`: Specifies aggregate demand across all regions.
         *   `regional_demand_distributions`: Defines the century-based regional allocation rules.

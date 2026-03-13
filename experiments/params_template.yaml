@@ -61,23 +61,19 @@ reputation_distribution:
   5: 0.2
 
 # --- PA Regime Configuration ---
-# These parameters define the specific PA (Pericope Adulterae) transmission regime.
+# These parameters define the intervention details for each textual regime.
 
-# pa_regime (str, required): The type of PA transmission regime.
-# Must be either "insertion" or "omission".
-pa_regime: "insertion"
-
-# pa_intervention_year (int, required): The simulation tick at which the PA intervention occurs.
-# Must be between 0 and total_ticks.
-pa_intervention_year: 50
-
-# pa_intervention_region (str, required): The geographical region where the PA intervention originates.
-# Must be a valid region (e.g., "Asia Minor", "Levant", "Egypt").
-pa_intervention_region: "Asia Minor"
-
-# pa_innovator_reputation (float, required): The fixed reputation score (1.0 to 5.0)
-# assigned to the initial witness instance that introduces the PA change.
-pa_innovator_reputation: 5.0
+# pa_regime_configs (Dict[str, Dict[str, Any]], optional): Per-regime intervention parameters.
+# This allows 'insertion' and 'omission' to have different years, regions, or reputations.
+pa_regime_configs:
+  insertion:
+    pa_intervention_year: 50
+    pa_intervention_region: "Asia Minor"
+    pa_innovator_reputation: 5.0
+  omission:
+    pa_intervention_year: 50
+    pa_intervention_region: "Asia Minor"
+    pa_innovator_reputation: 5.0
 
 
 # --- Advanced Textual & Demographic Configuration ---

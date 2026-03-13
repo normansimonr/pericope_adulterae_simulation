@@ -8,7 +8,7 @@ for both textual replay regimes.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, cast
 
 import networkx as nx
 import numpy as np
@@ -133,7 +133,19 @@ def _run_regime_replay(
     """Runs the text replay for a specific regime and stores/saves results."""
     from pasim.analysis.majority_text import compute_majority_text
 
-    regime_config = config.model_copy(update={"pa_regime": regime})
+    # Extract regime-specific parameters if they exist
+    target_regime = cast(Literal["insertion", "omission"], regime)
+
+    update_params: Dict[str, Any] = {"pa_regime": target_regime}
+    if config.pa_regime_configs and target_regime in config.pa_regime_configs:
+        regime_params = config.pa_regime_configs[target_regime]
+        update_params.update({
+            "pa_intervention_year": regime_params.pa_intervention_year,
+            "pa_intervention_region": regime_params.pa_intervention_region,
+            "pa_innovator_reputation": regime_params.pa_innovator_reputation,
+        })
+
+    regime_config = config.model_copy(update=update_params)
     replay_seed = derive_replay_seed(seed, regime)
     replay_engine = TextReplayEngine(regime_config, snapshot, replay_seed)
     replayed_texts = replay_engine.run()
@@ -186,6 +198,9 @@ def _run_regime_replay(
         ideal_majority_array = np.array(ideal_majority_segments, dtype=np.int16)
         ideal_disagree_count = np.sum(ideal_majority_array != autograph_text)
         pct_ideal_majority_disagree = ideal_disagree_count / text_length
+
+    # The replay logic guarantees an innovator is found or it raises RuntimeError.
+    assert replay_engine.innovator_id is not None
 
     result.replays[regime] = ReplayResult(
         pa_regime=regime,

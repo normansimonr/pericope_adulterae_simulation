@@ -1,5 +1,5 @@
 total_ticks: 1296
-n_runs: 10
+n_runs: 100
 max_retries: 3
 seed: null
 text_length: 100
@@ -12,10 +12,15 @@ reputation_distribution:
   3: 0.3
   4: 0.3
   5: 0.2
-pa_regime: "insertion"
-pa_intervention_year: 150
-pa_intervention_region: "Asia Minor"
-pa_innovator_reputation: 5.0
+pa_regime_configs:
+  insertion:
+    pa_intervention_year: 150
+    pa_intervention_region: "Asia Minor"
+    pa_innovator_reputation: 5.0
+  omission:
+    pa_intervention_year: 150
+    pa_intervention_region: "Egypt"
+    pa_innovator_reputation: 5.0
 persecutions:
 - start_tick: 303
   regions:
@@ -25,86 +30,86 @@ persecutions:
   kill_proportion: 0.15
 - start_tick: 350
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 399
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 406
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 407
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 419
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 509
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 528
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 543
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 560
   regions: []
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 585
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 593
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 603
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 604
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 606
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 611
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 615
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 620
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 630
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 635
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 - start_tick: 648
   regions:
   - Egypt
   - Levant
-  kill_proportion: 0.05
+  kill_proportion: 0.03
 material_transitions:
   - start_tick: 0
     distribution:
@@ -149,10 +154,10 @@ script_transitions:
 # reputation_mutation_mapping (Dict[int, float], optional): Maps reputation (1-5)
 # to the expected proportion of segments that will mutate during a copy.
 reputation_mutation_mapping:
-  1: 0.05
-  2: 0.04
-  3: 0.03
-  4: 0.02
+  1: 0.03
+  2: 0.025
+  3: 0.02
+  4: 0.015
   5: 0.01
 
 # survivor_sampling_targets (Dict[str, Any], optional): Targets and rules for the

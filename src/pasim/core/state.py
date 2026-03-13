@@ -146,7 +146,7 @@ class ManuscriptRegistry:
     what manuscripts exist within the simulation state.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._manuscripts: Dict[str, Manuscript] = {}
 
     def add(self, manuscript: Manuscript) -> None:
@@ -181,7 +181,7 @@ class WitnessRegistry:
     refers to a manuscript that exists in the ManuscriptRegistry.
     """
 
-    def __init__(self, manuscript_registry: ManuscriptRegistry):
+    def __init__(self, manuscript_registry: ManuscriptRegistry) -> None:
         self._witnesses: Dict[str, Witness] = {}
         self._manuscript_registry = manuscript_registry
 
@@ -227,5 +227,5 @@ class StateRegistry:
     witnesses: WitnessRegistry = field(init=False)
     instance_texts: dict[str, np.ndarray] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.witnesses = WitnessRegistry(self.manuscripts)

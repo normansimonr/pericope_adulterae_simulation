@@ -130,6 +130,14 @@ class LifespanConfig(BaseModel):
     sigma: float
 
 
+class PARegimeConfig(BaseModel):
+    """Configuration for a specific PA (Pericope Adulterae) transmission regime."""
+
+    pa_intervention_year: int = Field(..., ge=0)
+    pa_intervention_region: Region
+    pa_innovator_reputation: float = Field(..., ge=1.0, le=5.0)
+
+
 class SimulationConfig(BaseModel):
     """Root model for the entire simulation configuration."""
 
@@ -218,11 +226,14 @@ class SimulationConfig(BaseModel):
     log_tick_frequency: int = Field(100, ge=1)
     validation_frequency: int = Field(10, ge=0)  # 0 means disabled, N means every N ticks
 
-    # PA Regime Configuration
-    pa_regime: Literal["insertion", "omission"]
-    pa_intervention_year: int = Field(..., ge=0)
-    pa_intervention_region: Region
-    pa_innovator_reputation: float = Field(..., ge=1.0, le=5.0)
+    # PA Regime Configuration (Top-level defaults)
+    pa_regime: Literal["insertion", "omission"] = "insertion"
+    pa_intervention_year: int = Field(50, ge=0)
+    pa_intervention_region: Region = Region.ASIA_MINOR
+    pa_innovator_reputation: float = Field(5.0, ge=1.0, le=5.0)
+
+    # Optional per-regime overrides. If missing, top-level pa_* params are used as defaults.
+    pa_regime_configs: Optional[Dict[Literal["insertion", "omission"], PARegimeConfig]] = None
 
     # Execution / Persistence Configuration
     persistence_level: Literal["minimal", "full"] = "minimal"
