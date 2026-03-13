@@ -156,4 +156,5 @@ def run_parallel(
         "failed_runs": failed_runs_count,
         "failure_records": failure_records,
         "total_runs_attempted": n_runs,
+        "total_requested_runs": n_runs,
     }

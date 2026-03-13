@@ -1,7 +1,10 @@
-total_ticks: 200
+# Experiment Orchestration
 n_runs: 1
 max_retries: 3
 seed: null
+
+# Simulation Configuration
+total_ticks: 200
 text_length: 200
 p_region_migration: 0.01
 p_internal_relocation: 0.05
@@ -11,22 +14,75 @@ reputation_distribution:
   3: 0.4
   4: 0.2
   5: 0.1
+
 pa_regime: "insertion"
 pa_intervention_year: 50
 pa_intervention_region: "Asia Minor"
 pa_innovator_reputation: 5.0
+
+# Advanced Configuration
+reputation_mutation_mapping:
+  1: 0.10
+  2: 0.10
+  3: 0.30
+  4: 0.30
+  5: 0.20
+
+survivor_sampling_targets:
+  target_total: 3000
+  target_born_650_or_later: 2400
+  target_born_earlier: 600
+  proportion_asia_minor: 0.98
+  sampling_seed_offset: 999999
+  eligibility_min_tick: 300
+  strata_boundary_tick: 650
+  strata_focus_region: "Asia Minor"
+
+lifespan_parameters:
+  papyrus:
+    Asia Minor: {mu: 4.72, sigma: 0.30}
+    Levant: {mu: 4.72, sigma: 0.30}
+    Egypt: {mu: 5.12, sigma: 0.60}
+  parchment:
+    Asia Minor: {mu: 5.5, sigma: 0.5}
+    Levant: {mu: 5.5, sigma: 0.5}
+    Egypt: {mu: 6.0, sigma: 0.5}
+  paper:
+    Asia Minor: {mu: 5.0, sigma: 0.5}
+    Levant: {mu: 5.0, sigma: 0.5}
+    Egypt: {mu: 5.5, sigma: 0.5}
+
+region_bounds:
+  Asia Minor: [[0.0, 100.0], [0.0, 100.0]]
+  Egypt: [[200.0, 300.0], [200.0, 300.0]]
+  Levant: [[400.0, 500.0], [400.0, 500.0]]
+
+regional_demand_distributions:
+  "0-2": {"Asia Minor": 0.70, "Levant": 0.25, "Egypt": 0.05}
+  "3-5": {"Asia Minor": 0.55, "Levant": 0.25, "Egypt": 0.20}
+  "6+": {"Asia Minor": 1.00, "Levant": 0.00, "Egypt": 0.00}
+
+parent_num_distribution: [0.8, 0.1, 0.1]
+geographical_candidate_pool_size: 10
+pa_intervention_radius: 10.0
+log_tick_frequency: 100
+validation_frequency: 0
+
 persecutions: []
+
 material_transitions:
 - start_tick: 0
   distribution:
     papyrus: 1.0
     parchment: 0.0
     paper: 0.0
+
 script_transitions:
 - start_tick: 0
   distribution:
     uncial: 1.0
     minuscule: 0.0
+
 demand_schedule:
   1: 1
   2: 1
@@ -227,4 +283,3 @@ demand_schedule:
   198: 19
   199: 19
   200: 20
-log_tick_frequency: 100

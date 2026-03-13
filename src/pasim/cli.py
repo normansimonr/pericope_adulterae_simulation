@@ -84,23 +84,60 @@ def _cmd_help(args: argparse.Namespace) -> None:
     print("Example: pasim run experiments/exp001_baseline/params.yaml")
 
 
+def _check_params_against_template(params_path: Path) -> None:
+    """Checks the given parameters file against the canonical template for mismatches."""
+    if not PARAMS_TEMPLATE_PATH.is_file():
+        logger.warning(f"Warning: Canonical template not found at {PARAMS_TEMPLATE_PATH}. Skipping structure check.")
+        return
+
+    try:
+        user_params = _load_params_file(params_path)
+        template_params = _load_params_file(PARAMS_TEMPLATE_PATH)
+    except Exception as e:
+        logger.warning(f"Warning: Could not perform parameter template check: {e}")
+        return
+
+    user_keys = set(user_params.keys())
+    template_keys = set(template_params.keys())
+
+    missing_in_user = template_keys - user_keys
+    extra_in_user = user_keys - template_keys
+
+    if missing_in_user:
+        error_msg = (
+            f"Validation Error: The following parameters are present in the template but missing in your file: "
+            f"{sorted(list(missing_in_user))}\nRefer to experiments/params_template.yaml for the recommended configuration structure."
+        )
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    if extra_in_user:
+        logger.warning(f"Warning: Your parameters file contains keys not present in the template: {sorted(list(extra_in_user))}")
+
+
 def _cmd_run(args: argparse.Namespace) -> None:
     """Runs a simulation experiment."""
     _configure_logging(args.verbose)
     params_path = _validate_params_path(args.params_path)
 
     try:
+        # Perform structural check against template before execution
+        _check_params_against_template(params_path)
+
         logger.info(f"Starting experiment from {params_path}...")
         summary = pasim.execution.orchestrator.run_experiment(params_path, persistence_level=args.persistence_level)
 
-        if summary["failed_runs"] > 0:
-            logger.error(f"Experiment completed with {summary['failed_runs']} failures out of {summary['total_requested_runs']} runs.")
+        failed_runs = summary.get("failed_runs", 0)
+        total_runs = summary.get("total_runs_attempted") or summary.get("total_requested_runs", "unknown")
+
+        if failed_runs > 0:
+            logger.error(f"Experiment completed with {failed_runs} failures out of {total_runs} runs.")
             if args.verbose:
-                for record in summary["failure_records"]:
+                for record in summary.get("failure_records", []):
                     logger.error(f"  Run (seed: {record['seed']}) failed: {record['error']} (attempt: {record['attempt']})")
             sys.exit(1)
         else:
-            logger.info(f"Experiment completed successfully: {summary['successful_runs']} runs completed.")
+            logger.info(f"Experiment completed successfully: {summary.get('successful_runs', 0)} runs completed.")
             sys.exit(0)
     except FileNotFoundError as e:
         logger.error(f"Error: {e}")

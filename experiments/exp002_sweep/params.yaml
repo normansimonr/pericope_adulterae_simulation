@@ -1,116 +1,103 @@
-# This is a canonical template for defining an experiment in the pasim simulation framework.
-#
-# It includes both top-level experiment orchestration parameters and
-# the detailed simulation configuration that governs the simulation's dynamics.
-#
-# To use this template:
-# 1. Copy it to a new experiment directory, e.g., 'experiments/my_experiment/params.yaml'.
-# 2. Adjust the parameters as needed for your specific experiment.
-
-# --- Experiment Orchestration Parameters ---
-# These parameters control how the simulation framework runs your experiment.
-
 # n_runs (int, required): The number of independent Monte Carlo simulation runs to execute.
-# For a single run, set this to 1.
 n_runs: 1
 
 # max_retries (int, required): The maximum number of times to retry a failed individual run.
-# Retries help to mitigate transient errors in parallel execution.
 max_retries: 3
 
 # seed (int or null, optional): The master seed for the random number generators.
-# If provided, ensures full reproducibility of the *entire batch* of runs.
-# Each individual run will derive a unique, deterministic seed from this master seed.
-# If null or omitted, a default fixed seed will be used for batch reproducibility.
-seed: null # Example: 12345
-
-
-# --- Simulation Configuration ---
-# These parameters define the intrinsic dynamics and historical context of a single
-# simulation run. They directly map to the pasim.config.schema.SimulationConfig Pydantic model.
+seed: null
 
 # total_ticks (int, required): The total duration of the simulation in discrete time steps (ticks).
-# Must be greater than or equal to 1.
-total_ticks: 100
+total_ticks: 1000
 
 # text_length (int, optional): The length of the tagged string representing the textual content.
-# Must be greater than or equal to 1. Defaults to 200.
 text_length: 200
 
 # p_region_migration (float, optional): The probability (0.0 to 1.0) that a manuscript
-# will migrate to a different region during a tick. Defaults to 0.0 (no migration).
+# will migrate to a different region during a tick.
 p_region_migration: 0.0
 
 # p_internal_relocation (float, optional): The probability (0.0 to 1.0) that a manuscript
-# will relocate within its current region during a tick. Defaults to 0.0 (no internal relocation).
+# will relocate within its current region during a tick.
 p_internal_relocation: 0.0
 
 # reputation_distribution (Dict[int, float], required): Defines the probability distribution
 # for sampling new reputation scores (1-5) for newly created witness instances.
-# Keys must be integers 1-5, values must be floats >= 0, and they must sum to 1.0.
 reputation_distribution:
-  1: 0.2 # Probability of a new witness having reputation 1
+  1: 0.2
   2: 0.2
   3: 0.2
   4: 0.2
   5: 0.2
+
 pa_regime: "insertion"
-pa_intervention_year: 50
+pa_intervention_year: 0
 pa_intervention_region: "Asia Minor"
 pa_innovator_reputation: 5.0
 
-# persecutions (List[PersecutionEventConfig], optional): A list of historical "shock" events.
-# Each entry defines a persecution that can destroy a fraction of manuscripts in specific regions.
-persecutions:
-  # - start_tick: 50
-  #   end_tick: 55 # If omitted, event is instantaneous at start_tick
-  #   regions:
-  #     - "Asia Minor"
-  #     - "Egypt"
-  #   kill_proportion: 0.5 # 50% of eligible manuscripts in specified regions are destroyed
+# --- Advanced Configuration ---
 
-# material_transitions (List[MaterialTransitionConfig], optional): A schedule defining how the
-# probability distribution of new manuscript materials changes over time.
-# start_tick values must be strictly increasing.
+reputation_mutation_mapping:
+  1: 0.10
+  2: 0.10
+  3: 0.30
+  4: 0.30
+  5: 0.20
+
+survivor_sampling_targets:
+  target_total: 3000
+  target_born_650_or_later: 2400
+  target_born_earlier: 600
+  proportion_asia_minor: 0.98
+  sampling_seed_offset: 999999
+  eligibility_min_tick: 300
+  strata_boundary_tick: 650
+  strata_focus_region: "Asia Minor"
+
+lifespan_parameters:
+  papyrus:
+    Asia Minor: {mu: 4.72, sigma: 0.30}
+    Levant: {mu: 4.72, sigma: 0.30}
+    Egypt: {mu: 5.12, sigma: 0.60}
+  parchment:
+    Asia Minor: {mu: 5.5, sigma: 0.5}
+    Levant: {mu: 5.5, sigma: 0.5}
+    Egypt: {mu: 6.0, sigma: 0.5}
+  paper:
+    Asia Minor: {mu: 5.0, sigma: 0.5}
+    Levant: {mu: 5.0, sigma: 0.5}
+    Egypt: {mu: 5.5, sigma: 0.5}
+
+region_bounds:
+  Asia Minor: [[0.0, 100.0], [0.0, 100.0]]
+  Egypt: [[200.0, 300.0], [200.0, 300.0]]
+  Levant: [[400.0, 500.0], [400.0, 500.0]]
+
+regional_demand_distributions:
+  "0-2": {"Asia Minor": 0.70, "Levant": 0.25, "Egypt": 0.05}
+  "3-5": {"Asia Minor": 0.55, "Levant": 0.25, "Egypt": 0.20}
+  "6+": {"Asia Minor": 1.00, "Levant": 0.00, "Egypt": 0.00}
+
+parent_num_distribution: [0.8, 0.1, 0.1]
+geographical_candidate_pool_size: 10
+pa_intervention_radius: 10.0
+log_tick_frequency: 100
+validation_frequency: 0
+
+persecutions: []
+
 material_transitions:
-  - start_tick: 0 # From tick 0, use this distribution
+  - start_tick: 0
     distribution:
       parchment: 0.8
       papyrus: 0.2
       paper: 0.0
-  # - start_tick: 50 # From tick 50, switch to this distribution
-  #   distribution:
-  #     parchment: 0.6
-  #     papyrus: 0.1
-  #     paper: 0.3
 
-# script_transitions (List[ScriptTransitionConfig], optional): A schedule defining how the
-# probability distribution of new witness script styles changes over time.
-# start_tick values must be strictly increasing.
 script_transitions:
-  - start_tick: 0 # From tick 0, use this distribution
+  - start_tick: 0
     distribution:
       uncial: 1.0
       minuscule: 0.0
-  # - start_tick: 70 # From tick 70, switch to this distribution
-  #   distribution:
-  #     uncial: 0.3
-  #     minuscule: 0.7
 
-# demand_schedule (Dict[int, Dict[Region, int]], required): Defines the demand for new manuscripts
-# across different regions over time. The simulation will attempt to spawn new manuscripts
-# to meet these minimum numbers. If a tick is not explicitly defined, the last known demand
-# value for that region is used.
 demand_schedule:
-  0: # Demand at tick 0
-    Asia Minor: 1 # At tick 0, ensure 1 manuscript in Asia Minor
-    Egypt: 0
-    Levant: 0
-  # 10: # Demand at tick 10
-  #   Asia Minor: 2
-  #   Egypt: 1
-  #   Levant: 0
-  # 20: # Demand at tick 20 (and all subsequent ticks until a new entry)
-  #   Asia Minor: 3
-  #   Egypt: 2
-  #   Levant: 1
+  0: 1000

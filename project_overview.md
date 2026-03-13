@@ -416,7 +416,7 @@ This module provides the comprehensive command-line interface (CLI) for the `pas
 
 **Key Features and Commands:**
 
-*   **`pasim run <params_path>`**: Executes a simulation experiment using a specified parameters YAML file. It leverages `pasim.execution.orchestrator.run_experiment` for robust execution, parallel processing, and result persistence. Supports a `--verbose` flag for detailed logging.
+*   **`pasim run <params_path>`**: Executes a simulation experiment using a specified parameters YAML file. It leverages `pasim.execution.orchestrator.run_experiment` for robust execution, parallel processing, and result persistence. Before execution, it performs a strict structural validation of the user's `params.yaml` against the canonical `experiments/params_template.yaml`; if any required parameters are missing, it will report the errors and halt execution. Supports a `--verbose` flag for detailed logging.
 *   **`pasim reset [--force]`**: Cleans up experiment-generated data by removing `runs/` directories and `experiment_metadata.json` files from experiment folders. It prompts for user confirmation unless the `--force` flag is used.
 *   **`pasim list`**: Scans the `experiments/` directory and provides a summary of all defined experiments, including their names, requested runs, completed runs, and current status based on metadata.
 *   **`pasim tests`**: Programmatically invokes `pytest` to run the project's test suite. It can forward a `--verbose` flag to `pytest`.
