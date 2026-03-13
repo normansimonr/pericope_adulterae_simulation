@@ -93,10 +93,12 @@ def _validate_and_load_config(params_path: str) -> SimulationConfig:
     return SimulationConfig(**params_dict)
 
 
-def _run_demographics(config: SimulationConfig, seed: int) -> tuple[GenerationState, GenealogySnapshot, SamplingResult]:
+def _run_demographics(
+    config: SimulationConfig, seed: int, run_id: int = 1, attempt: int = 0
+) -> tuple[GenerationState, GenealogySnapshot, SamplingResult]:
     """Runs the demographic simulation and extracts the genealogy snapshot and survivor samples."""
     rng = RNGContext(seed).spawn(1)[0]
-    state = run_genealogy_generator(config=config, rng=rng)
+    state = run_genealogy_generator(config=config, rng=rng, run_id=run_id, attempt=attempt)
     snapshot = extract_genealogy_snapshot(state)
     sampling_result = sample_survivors(snapshot, seed, config.total_ticks, config)
     return state, snapshot, sampling_result
@@ -239,6 +241,7 @@ def run_single(
     persistence_level: str = "full",
     run_id: Optional[int] = None,
     regime: Optional[str] = None,
+    attempt: int = 0,
 ) -> SimulationResult:
     """
     Executes a single, in-memory simulation run.
@@ -247,10 +250,11 @@ def run_single(
     If a specific regime is provided, only that regime is replayed.
     """
     config = _validate_and_load_config(params_path)
-    state, snapshot, sampling_result = _run_demographics(config, seed)
 
     params_path_obj = Path(params_path)
     resolved_run_id, run_dir = _resolve_run_context(params_path_obj, run_id, persistence_level)
+
+    state, snapshot, sampling_result = _run_demographics(config, seed, run_id=resolved_run_id, attempt=attempt)
 
     result = SimulationResult(
         state=state,

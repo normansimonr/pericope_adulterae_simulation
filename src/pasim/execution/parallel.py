@@ -32,6 +32,7 @@ def _run_wrapper(
                 persistence_level=persistence_level,
                 run_id=run_spec.run_id,
                 regime=regime,
+                attempt=attempt,
             )
             return {
                 "status": "success",

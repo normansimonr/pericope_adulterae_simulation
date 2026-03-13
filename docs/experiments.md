@@ -22,15 +22,11 @@ experiments/
         events.log          # Chronological log of key simulation events.
       2/                    # Another run directory.
       ...
-  exp002_sweep/
-    params.yaml
-    runs/
-      ...
 ```
 
 **Key Points:**
 
-*   **Dedicated Directories:** Each unique experiment (e.g., `exp001_baseline`, `exp002_sweep`) must have its own subdirectory directly under `experiments/`.
+*   **Dedicated Directories:** Each unique experiment (e.g., `exp001_baseline`) must have its own subdirectory directly under `experiments/`.
 *   **Single `params.yaml`:** Every experiment directory must contain exactly one `params.yaml` file. This file specifies both the overall experiment orchestration (like the number of runs) and the detailed simulation configuration.
 *   **Auto-generated `runs/`:** The `runs/` subdirectory is automatically created by the experiment runner when the experiment is executed. It houses the results of individual simulation runs.
 *   **Indexed Run Folders:** Individual run folders within `runs/` are named by integer counters (e.g., `1/`, `2/`, `3/`). These are simple incremental indices, not timestamps or zero-padded numbers.

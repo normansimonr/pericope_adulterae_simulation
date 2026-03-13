@@ -448,18 +448,22 @@ def advance_tick(
     material_transition_manager: MaterialTransitionManager,
     script_transition_manager: ScriptTransitionManager,
     log_tick_frequency: int,
+    run_id: int = 1,
+    attempt: int = 0,
 ) -> GenerationState:
     """Advances the simulation clock and orchestrates per-tick events.
 
     Args:
         state: The current state of the genealogy generation.
         demand_today: A dictionary defining regional demand for the current tick.
-        death_ticks: A queue of pre-calculated death ticks.
         params: The validated simulation configuration object.
         rng: The random number generator for this simulation.
         event_manager: The manager for historical events.
         material_transition_manager: The manager for time-dependent material probabilities.
         script_transition_manager: The manager for time-dependent script probabilities.
+        log_tick_frequency: The frequency (in ticks) at which progress updates.
+        run_id: The identifier for the current simulation run.
+        attempt: The retry attempt number for the current run.
 
     Returns:
         The updated state after processing the tick.
@@ -470,7 +474,11 @@ def advance_tick(
     current_tick_for_logging = state.tick
 
     if current_tick_for_logging % log_tick_frequency == 0:
-        logger.log(log_level, f"Tick {current_tick_for_logging:04d}: Starting... (Alive Manuscripts: {len(state.alive_manuscripts)})")
+        logger.log(
+            log_level,
+            f"Run {run_id} (att: {attempt}) | Tick {current_tick_for_logging:04d}: Starting... "
+            f"(Alive Manuscripts: {len(state.alive_manuscripts)})",
+        )
 
     start_time = time.perf_counter()
 
@@ -510,7 +518,7 @@ def advance_tick(
     if current_tick_for_logging % log_tick_frequency == 0:
         logger.log(
             log_level,
-            f"Tick {current_tick_for_logging:04d}: Completed in {duration_ms:.2f}ms. "
+            f"Run {run_id} (att: {attempt}) | Tick {current_tick_for_logging:04d}: Completed in {duration_ms:.2f}ms. "
             f"(Alive Manuscripts: {len(state.alive_manuscripts)}, "
             f"Total Manuscripts: {len(state.registries.manuscripts)})",
         )
@@ -559,7 +567,12 @@ def extract_genealogy_snapshot(state: GenerationState) -> GenealogySnapshot:
     return GenealogySnapshot(nodes=nodes)
 
 
-def run_genealogy_generator(config: Union[SimulationConfig, Dict[str, Any]], rng: RNG) -> GenerationState:
+def run_genealogy_generator(
+    config: Union[SimulationConfig, Dict[str, Any]],
+    rng: RNG,
+    run_id: int = 1,
+    attempt: int = 0,
+) -> GenerationState:
     """High-level orchestration entry point for genealogy generation.
 
     This function drives the entire deterministic, tick-based process of
@@ -574,6 +587,8 @@ def run_genealogy_generator(config: Union[SimulationConfig, Dict[str, Any]], rng
         config (Union[SimulationConfig, Dict[str, Any]]): The simulation configuration.
         rng (RNG): A seeded NumPy random number generator to ensure
                    reproducibility.
+        run_id (int): The identifier for the current simulation run.
+        attempt (int): The retry attempt number for the current run.
 
     Returns:
         GenerationState: The final generated simulation state, including the
@@ -624,6 +639,8 @@ def run_genealogy_generator(config: Union[SimulationConfig, Dict[str, Any]], rng
             material_transition_manager=material_transition_manager,
             script_transition_manager=script_transition_manager,
             log_tick_frequency=config.log_tick_frequency,
+            run_id=run_id,
+            attempt=attempt,
         )
 
     return state
