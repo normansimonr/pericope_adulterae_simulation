@@ -5,6 +5,7 @@ seed: null
 text_length: 100
 p_region_migration: 0.01
 p_internal_relocation: 0.04
+p_uncial_exemplar_death_on_minuscule_birth: 0.1
 reputation_distribution:
   1: 0.1
   2: 0.1
@@ -122,8 +123,24 @@ script_transitions:
       minuscule: 0.0
   - start_tick: 700
     distribution:
+      uncial: 0.8
+      minuscule: 0.2
+  - start_tick: 750
+    distribution:
+      uncial: 0.6
+      minuscule: 0.4
+  - start_tick: 800
+    distribution:
+      uncial: 0.5
+      minuscule: 0.5
+  - start_tick: 850
+    distribution:
       uncial: 0.3
       minuscule: 0.7
+  - start_tick: 900
+    distribution:
+      uncial: 0.0
+      minuscule: 1
 
 # --- Advanced Textual & Demographic Configuration ---
 # Optional parameters for fine-tuning the simulation's behavior.

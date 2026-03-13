@@ -137,6 +137,7 @@ class SimulationConfig(BaseModel):
     text_length: int = Field(200, ge=1)
     p_region_migration: float = Field(0.0, ge=0.0, le=1.0)
     p_internal_relocation: float = Field(0.0, ge=0.0, le=1.0)
+    p_uncial_exemplar_death_on_minuscule_birth: float = Field(0.0, ge=0.0, le=1.0)
     reputation_distribution: Dict[int, float]
 
     # Lifespan parameters (Material -> Region -> LifespanConfig)

@@ -59,7 +59,7 @@ from pasim.core.material_transition_manager import MaterialTransitionManager
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
 from pasim.core.spatial import generate_random_coordinates
-from pasim.core.state import DeathReason, Manuscript, Region, Witness
+from pasim.core.state import DeathReason, Manuscript, Region, Script, Witness
 
 logger = logging.getLogger(__name__)
 
@@ -345,6 +345,34 @@ def _handle_spawned_witness_node(
         )
 
 
+def _handle_cultural_replacement(
+    state: GenerationState,
+    child_script: Script,
+    exemplars: List[str],
+    current_tick: int,
+    params: SimulationConfig,
+    rng: RNG,
+    instance_id: str,
+) -> None:
+    """Potentially kills Uncial parents when a Minuscule child is born."""
+    if child_script != Script.MINUSCULE or params.p_uncial_exemplar_death_on_minuscule_birth <= 0:
+        return
+
+    for parent_id in exemplars:
+        parent_ms_id = state.graph.nodes[parent_id]["manuscript_id"]
+        if parent_ms_id in state.alive_manuscripts:
+            parent_witness_id = state.graph.nodes[parent_id]["witness_id"]
+            parent_witness = state.registries.witnesses.get(parent_witness_id)
+            if parent_witness.script == Script.UNCIAL:
+                if rng.random() < params.p_uncial_exemplar_death_on_minuscule_birth:
+                    state.alive_manuscripts.remove(parent_ms_id)
+                    parent_ms = state.registries.manuscripts.get(parent_ms_id)
+                    state.alive_by_region[parent_ms.region].remove(parent_ms_id)
+                    parent_ms.death_tick = current_tick
+                    parent_ms.death_reason = DeathReason.CULTURAL_REPLACEMENT
+                    logger.debug(f"Tick {current_tick}: Uncial {parent_ms_id} killed by Minuscule {instance_id} birth")
+
+
 def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
     demand_today: Dict[Region, int],
@@ -400,6 +428,8 @@ def _spawn_new_manuscripts_from_demand(
             state.registries.witnesses.add(Witness(witness_id=witness_id, manuscript_id=manuscript_id, script=props["scripts"][i]))
 
             _handle_spawned_witness_node(state, instance_id, witness_id, manuscript_id, current_tick, reputation, exemplars, params, rng)
+
+            _handle_cultural_replacement(state, props["scripts"][i], exemplars, current_tick, params, rng, instance_id)
 
             state.alive_manuscripts.add(manuscript_id)
             state.alive_by_region[region].add(manuscript_id)

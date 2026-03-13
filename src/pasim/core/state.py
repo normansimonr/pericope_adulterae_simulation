@@ -41,6 +41,7 @@ class DeathReason(Enum):
 
     NATURAL = "natural"
     PERSECUTION = "persecution"
+    CULTURAL_REPLACEMENT = "cultural_replacement"
 
 
 @dataclass

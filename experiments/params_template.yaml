@@ -45,6 +45,11 @@ p_region_migration: 0.0
 # will relocate within its current region during a tick. Defaults to 0.0 (no internal relocation).
 p_internal_relocation: 0.0
 
+# p_uncial_exemplar_death_on_minuscule_birth (float, optional): The probability (0.0 to 1.0)
+# that an Uncial parent manuscript is killed (removed from alive pool) when a new
+# Minuscule child witness is created. This models cultural replacement. Defaults to 0.0.
+p_uncial_exemplar_death_on_minuscule_birth: 0.0
+
 # pa_innovator_reputation (float, required): Defines the probability distribution
 # for sampling new reputation scores (1-5) for newly created witness instances.
 # Keys must be integers 1-5, values must be floats >= 0, and they must sum to 1.0.
