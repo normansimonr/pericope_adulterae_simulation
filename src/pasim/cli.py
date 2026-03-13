@@ -16,7 +16,6 @@ logger = logging.getLogger("pasim")
 
 # --- Global Settings ---
 EXPERIMENTS_DIR = Path("experiments")
-DOCS_EXPERIMENTS_PATH = Path("docs/experiments.md")
 PARAMS_TEMPLATE_PATH = EXPERIMENTS_DIR / "params_template.yaml"
 
 # --- CLI Utility Functions ---
@@ -79,7 +78,6 @@ def _cmd_help(args: argparse.Namespace) -> None:
     print("Each experiment should be in its own directory, e.g., 'experiments/my_experiment/'.")
     print("Inside, there should be a 'params.yaml' file configuring the experiment.")
     print("Simulation results are stored in auto-generated 'runs/' subdirectories.")
-    print(f"\nFor more detailed documentation, see {DOCS_EXPERIMENTS_PATH}.")
     print("\nTo run an experiment, use 'pasim run <path/to/params.yaml>'.")
     print("Example: pasim run experiments/exp001_baseline/params.yaml")
 

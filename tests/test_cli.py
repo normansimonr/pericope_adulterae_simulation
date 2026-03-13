@@ -243,7 +243,7 @@ def test_help_command_subcommand(capsys, monkeypatch):
     assert "--- pasim CLI Usage ---" in process.stdout
     assert "Available Commands:" in process.stdout
     assert "run <params_path>" in process.stdout
-    assert "For more detailed documentation, see docs/experiments.md." in process.stdout
+    assert "Example: pasim run experiments/exp001_baseline/params.yaml" in process.stdout
 
 
 def test_run_command_success(temp_experiment_env: Path, capsys, monkeypatch):

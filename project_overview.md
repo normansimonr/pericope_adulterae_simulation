@@ -105,7 +105,6 @@ This command will create a virtual environment (if one doesn't already exist) an
 The `pasim` framework provides a robust and flexible execution layer for running both single simulations and complex Monte Carlo experiments.
 
 For detailed instructions on setting up and running experiments, including the experiment directory structure, minimal single-run setup, and the structure of parameter files, please refer to:
--   **`docs/experiments.md`**: Comprehensive guide to experiment configuration and execution.
 -   **`experiments/params_template.yaml`**: A canonical template for defining experiment parameters.
 
 ### Experiment-Level Execution
