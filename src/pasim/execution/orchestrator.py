@@ -2,7 +2,7 @@ import datetime
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Union, cast
+from typing import Any, Dict, List, Set, Union, cast
 
 import yaml
 from pydantic import ValidationError
@@ -96,28 +96,48 @@ def _update_metadata_on_error(metadata: Dict[str, Any], experiment_metadata_path
         json.dump(current_metadata, f, indent=2)
 
 
+def _get_completed_run_ids(experiment_root: Path) -> List[int]:
+    """Reads results.csv to find IDs of already completed runs (must have both regimes)."""
+    results_path = experiment_root / "results.csv"
+    if not results_path.exists():
+        return []
+
+    import csv
+
+    from pasim.io.results_aggregator import _coerce_row_types
+
+    completed_regimes: Dict[int, Set[str]] = {}
+    with open(results_path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            _coerce_row_types(row)
+            run_id = int(row["run_id"])
+            regime = row["regime"]
+            completed_regimes.setdefault(run_id, set()).add(regime)
+
+    # A run is only "done" if both regimes are present
+    return [rid for rid, regimes in completed_regimes.items() if "insertion" in regimes and "omission" in regimes]
+
+
 def run_experiment(params_path: Union[Path, str], persistence_level: str = "minimal") -> Dict[str, Any]:
     """
     Executes a complete experiment definition, orchestrating multiple parallel
     Monte Carlo runs based on the provided parameters file.
+    Supports resuming from an existing results.csv file.
     """
     params_file_path = Path(params_path)
     if not params_file_path.is_file():
         raise FileNotFoundError(f"Experiment params file not found at: {params_file_path}")
 
+    experiment_root = params_file_path.parent
     experiment_metadata_path = _get_experiment_metadata_path(params_file_path)
     metadata = _init_experiment_metadata(params_file_path, persistence_level)
 
     try:
         params = _load_and_validate_params(params_file_path)
-        metadata["simulation_config_snapshot"] = params["config"].model_dump(mode="json")
-        metadata.update({
-            "total_requested_runs": int(params["n_runs"]),
-            "retry_policy": int(params["max_retries"]),
-            "seed": int(params["seed"]) if params["seed"] is not None else None,
-        })
-        with open(experiment_metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
+        _update_initial_metadata(metadata, params, experiment_metadata_path)
+
+        skip_run_ids = _handle_resumption_logic(metadata, experiment_root, persistence_level)
 
         experiment_summary = cast(
             Dict[str, Any],
@@ -127,18 +147,12 @@ def run_experiment(params_path: Union[Path, str], persistence_level: str = "mini
                 max_retries=params["max_retries"],
                 seed=params["seed"],
                 persistence_level=persistence_level,
+                skip_run_ids=skip_run_ids,
             ),
         )
 
-        aggregate_results(params_file_path.parent)
-        _update_metadata_on_success(metadata, experiment_metadata_path, experiment_summary)
-
-        print("\nExperiment Summary:")
-        print(f"Total Runs: {metadata['total_requested_runs']}")
-        print(f"Successful Runs: {metadata['run_counts']['successful']}")
-        print(f"Failed Runs: {metadata['run_counts']['failed']}")
-        if metadata["run_counts"]["failed"] > 0:
-            print(f"Failure Details: {metadata['summary']['failure_records']}")
+        aggregate_results(experiment_root)
+        _finalize_experiment(metadata, experiment_metadata_path, experiment_summary, experiment_root)
 
         return experiment_summary
 
@@ -151,3 +165,42 @@ def run_experiment(params_path: Union[Path, str], persistence_level: str = "mini
     except Exception as e:
         _update_metadata_on_error(metadata, experiment_metadata_path, e, "errored_runtime")
         raise
+
+
+def _update_initial_metadata(metadata: Dict[str, Any], params: Dict[str, Any], metadata_path: Path) -> None:
+    """Updates metadata with initial parameters and saves to disk."""
+    metadata["simulation_config_snapshot"] = params["config"].model_dump(mode="json")
+    metadata.update({
+        "total_requested_runs": int(params["n_runs"]),
+        "retry_policy": int(params["max_retries"]),
+        "seed": int(params["seed"]) if params["seed"] is not None else None,
+    })
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+
+def _handle_resumption_logic(metadata: Dict[str, Any], experiment_root: Path, persistence_level: str) -> List[int]:
+    """Handles logic for resuming an experiment."""
+    skip_run_ids = []
+    if persistence_level == "minimal":
+        skip_run_ids = _get_completed_run_ids(experiment_root)
+        if skip_run_ids:
+            print(f"Resuming experiment: found {len(skip_run_ids)} already completed runs in results.csv.")
+            metadata["resumed_from_completed_runs"] = len(skip_run_ids)
+    return skip_run_ids
+
+
+def _finalize_experiment(metadata: Dict[str, Any], metadata_path: Path, summary: Dict[str, Any], experiment_root: Path) -> None:
+    """Finalizes experiment summary, updates metadata, and prints output."""
+    total_completed = len(_get_completed_run_ids(experiment_root))
+    summary["total_successful_in_experiment"] = total_completed
+
+    _update_metadata_on_success(metadata, metadata_path, summary)
+
+    print("\nExperiment Summary:")
+    print(f"Total Requested Runs: {metadata['total_requested_runs']}")
+    print(f"Successfully Completed: {total_completed}")
+    print(f"Runs completed in this session: {summary['successful_runs']}")
+    print(f"Failed Runs: {summary['failed_runs']}")
+    if summary["failed_runs"] > 0:
+        print(f"Failure Details: {summary['failure_records']}")

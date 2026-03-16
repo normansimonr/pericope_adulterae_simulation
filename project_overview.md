@@ -112,6 +112,7 @@ For detailed instructions on setting up and running experiments, including the e
 The primary entry point for orchestrating full experiments is the `pasim.execution.orchestrator.run_experiment` function. This function takes a single parameter file and manages the entire execution lifecycle, including:
 
 -   Loading and validating experiment parameters (`n_runs`, `max_retries`, `seed`).
+-   **Experiment Resumption**: Automatically detects already completed runs in an existing `results.csv` and skips them, allowing interrupted experiments to resume or existing ones to be extended by increasing `n_runs`.
 -   Launching multiple independent simulation runs in parallel.
 -   Implementing robust retry logic for individual run failures.
 -   Persisting experiment-level metadata (`experiment_metadata.json`) for overall tracking and reproducibility.

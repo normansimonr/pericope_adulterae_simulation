@@ -73,84 +73,50 @@ def run_parallel(
     seed: Optional[int] = None,
     num_processes: Optional[int] = None,
     persistence_level: str = "full",
+    skip_run_ids: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     """
     Orchestrates multiple independent simulation runs in parallel.
     Each run consists of one demographic generation and two textual replays.
-
-    Args:
-        params_path (str): Path to the YAML configuration file for the experiment.
-        n_runs (int): The number of independent simulation runs to execute.
-        max_retries (int): The maximum number of times to retry a failed run.
-        seed (Optional[int]): An optional master seed for the random number generator.
-                              If None, a default fixed seed is used.
-        num_processes (Optional[int]): The number of parallel processes to use.
-                                       If None, it defaults to the number of CPUs.
-        persistence_level (str): The level of data persistence: 'minimal' or 'full'.
-
-    Returns:
-        Dict[str, Any]: A summary of the parallel execution, including counts of
-                        successful/failed runs and detailed failure records.
     """
     if n_runs <= 0:
+        return {"successful_runs": 0, "failed_runs": 0, "failure_records": [], "total_runs_attempted": 0}
+
+    run_plan = generate_run_plan(n_runs, seed=seed, skip_run_ids=skip_run_ids)
+
+    if not run_plan:
         return {
             "successful_runs": 0,
             "failed_runs": 0,
             "failure_records": [],
             "total_runs_attempted": 0,
+            "total_requested_runs": n_runs,
         }
-
-    # Generate the deterministic run plan
-    run_plan = generate_run_plan(n_runs, seed=seed)
 
     successful_runs_count = 0
     failed_runs_count = 0
     failure_records: List[Dict[str, Any]] = []
 
-    # Use default number of processes if not specified
     if num_processes is None:
         num_processes = os.cpu_count() or 1
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
-        # Submit each run to the executor. Each run will handle its own
-        # demographic phase and both textual regimes, avoiding redundant work.
-        futures = {}
-        for run_spec in run_plan:
-            future = executor.submit(
-                _run_wrapper,
-                params_path,
-                run_spec,
-                None,  # Run both regimes
-                max_retries,
-                persistence_level,
-            )
-            futures[future] = run_spec
+        futures = {executor.submit(_run_wrapper, params_path, spec, None, max_retries, persistence_level): spec for spec in run_plan}
 
         for future in as_completed(futures):
             run_spec = futures[future]
             try:
                 result_data = future.result()
-                if result_data["status"] == "success":
+                success, record = _process_run_result(run_spec, result_data)
+                if success:
                     successful_runs_count += 1
-                    logger.info(f"Run {run_spec.run_id} (seed: {run_spec.seed}) completed successfully.")
                 else:
                     failed_runs_count += 1
-                    failure_records.append({
-                        "run_id": run_spec.run_id,
-                        "seed": run_spec.seed,
-                        "error": result_data["error"],
-                        "attempt": result_data["retries"],
-                    })
-                    logger.error(f"Run {run_spec.run_id} (seed: {run_spec.seed}) failed: {result_data['error']}")
+                    failure_records.append(record)
             except Exception as exc:
                 failed_runs_count += 1
-                failure_records.append({
-                    "run_id": run_spec.run_id,
-                    "seed": run_spec.seed,
-                    "error": f"Unhandled exception: {str(exc)}",
-                    "attempt": 0,
-                })
-                logger.critical(f"Run {run_spec.run_id} (seed: {run_spec.seed}) generated an unhandled exception: {exc}")
+                failure_records.append({"run_id": run_spec.run_id, "seed": run_spec.seed, "error": str(exc), "attempt": 0})
+                logger.critical(f"Run {run_spec.run_id} (seed: {run_spec.seed}) unhandled exception: {exc}")
 
     return {
         "successful_runs": successful_runs_count,
@@ -159,3 +125,19 @@ def run_parallel(
         "total_runs_attempted": n_runs,
         "total_requested_runs": n_runs,
     }
+
+
+def _process_run_result(run_spec: RunSpec, result_data: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
+    """Processes the result of a single run from the worker pool."""
+    if result_data["status"] == "success":
+        logger.info(f"Run {run_spec.run_id} (seed: {run_spec.seed}) completed successfully.")
+        return True, {}
+
+    record = {
+        "run_id": run_spec.run_id,
+        "seed": run_spec.seed,
+        "error": result_data["error"],
+        "attempt": result_data["retries"],
+    }
+    logger.error(f"Run {run_spec.run_id} (seed: {run_spec.seed}) failed: {result_data['error']}")
+    return False, record
