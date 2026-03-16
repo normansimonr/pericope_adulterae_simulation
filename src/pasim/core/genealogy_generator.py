@@ -373,6 +373,20 @@ def _handle_cultural_replacement(
                     logger.debug(f"Tick {current_tick}: Uncial {parent_ms_id} killed by Minuscule {instance_id} birth")
 
 
+def _get_intervention_targets(config: SimulationConfig) -> List[tuple[int, Region]]:
+    """Identifies all unique (year, region) pairs where a PA intervention is planned."""
+    targets = set()
+    # Check top-level defaults
+    targets.add((config.pa_intervention_year, config.pa_intervention_region))
+
+    # Check per-regime overrides
+    if config.pa_regime_configs:
+        for regime_cfg in config.pa_regime_configs.values():
+            targets.add((regime_cfg.pa_intervention_year, regime_cfg.pa_intervention_region))
+
+    return list(targets)
+
+
 def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
     demand_today: Dict[Region, int],
@@ -387,10 +401,18 @@ def _spawn_new_manuscripts_from_demand(
         return state
 
     kdtree_by_region, alive_by_region_objects = _get_regional_alive_data(state)
+    intervention_targets = _get_intervention_targets(params)
 
     for region, demanded_count in demand_today.items():
         stock_count = len(state.alive_by_region[region])
         n_to_spawn = demanded_count - stock_count
+
+        # RULE: Force-spawn at least one new manuscript if this is an intervention target
+        # BUT only if the regional demand for that tick is > 0.
+        # This prevents spawning in regions where demand is explicitly zero (e.g. Egypt in later centuries).
+        if (current_tick, region) in intervention_targets and demanded_count > 0:
+            n_to_spawn = max(n_to_spawn, 1)
+
         if n_to_spawn <= 0:
             continue
 

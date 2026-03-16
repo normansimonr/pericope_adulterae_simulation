@@ -79,21 +79,27 @@ def test_pa_intervention_omission_regime(base_config_data):
 
 def test_pa_intervention_no_eligible_nodes(base_config_data):
     """Verify error if no nodes are born in the intervention year/region."""
-    # Set intervention year where no demand exists (though demand fallback might spawn some)
-    # Let's set a region that has 0 distribution if possible.
-    # Asia Minor has 1.0 distribution in later centuries, but Egypt has 0.0.
-    base_config_data["total_ticks"] = 1000
-    base_config_data["pa_intervention_year"] = 900
-    base_config_data["pa_intervention_region"] = "Egypt"  # 0 demand in century 6+
+    # To TRULY prevent any nodes from being born, we must ensure there is 0 demand
+    # for the intervention region and tick.
+    # If we set demand to 0, even the force-spawn will trigger because it uses `max(n_to_spawn, 1)`.
+    # WAIT: If demand_today[region] is 0, the loop in _spawn_new_manuscripts_from_demand
+    # still runs.
+
+    # Let's set the intervention year to a tick where NO demand is defined at all
+    # and total demand is 0.
+    base_config_data["demand_schedule"] = {1: 0}  # No demand at all
+    base_config_data["pa_intervention_year"] = 25
+    base_config_data["total_ticks"] = 50
 
     config = SimulationConfig(**base_config_data)
 
-    rng = RNGContext(seed=123).spawn(1)[0]
+    seed = 123
+    rng = RNGContext(seed).spawn(1)[0]
     state = run_genealogy_generator(config, rng)
     snapshot = extract_genealogy_snapshot(state)
 
     with pytest.raises(RuntimeError) as excinfo:
-        TextReplayEngine(config, snapshot, seed=123)
+        TextReplayEngine(config, snapshot, seed)
     assert "No eligible nodes found" in str(excinfo.value)
 
 
@@ -162,6 +168,39 @@ def test_pa_intervention_integrity(base_config_data):
     assert list(state.graph.edges()) == edges_before
     for n in nodes_before:
         assert state.graph.nodes[n] == attrs_before[n]
+
+
+def test_pa_intervention_force_spawn_on_flat_demand(base_config_data):
+    """
+    Verify that an intervention node is created even if regional demand
+    is already met, ensuring the force-spawn logic works.
+    """
+    # Set flat demand from tick 1 to 50
+    base_config_data["demand_schedule"] = {1: 10, 50: 10}
+    base_config_data["pa_intervention_year"] = 25
+    base_config_data["pa_intervention_region"] = "Asia Minor"
+
+    seed = 123
+    config = SimulationConfig(**base_config_data)
+
+    # Run demographic simulation
+    rng = RNGContext(seed).spawn(1)[0]
+    state = run_genealogy_generator(config, rng)
+    snapshot = extract_genealogy_snapshot(state)
+
+    # Count births at year 25 in Asia Minor
+    # Normally, 10 manuscripts born at tick 1 would stay alive (default lifespan is long)
+    # and no new births would occur at tick 25 because demand (10) is already met.
+    births_at_25 = [n for n in snapshot.nodes if n.birth_tick == 25 and n.region == config.pa_intervention_region]
+
+    # Without force-spawn, this would be 0.
+    assert len(births_at_25) >= 1
+
+    # Ensure text replay succeeds
+    engine = TextReplayEngine(config, snapshot, seed)
+    texts = engine.run()
+    assert engine.innovator_id in texts
+    assert np.all(texts[engine.innovator_id] == 1)
 
 
 def test_pa_intervention_exactly_once(base_config_data):
