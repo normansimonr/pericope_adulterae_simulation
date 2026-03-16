@@ -1,5 +1,6 @@
 import csv
 import shutil
+import time
 from pathlib import Path
 
 
@@ -7,10 +8,37 @@ def aggregate_results(experiment_root: Path):
     """
     Reads all temporary CSV files in experiment_root/temp_results/,
     merges them with any existing results.csv, sorts them, and deletes the temp dir.
+    Uses a simple lock-file mechanism to prevent race conditions in parallel mode.
     """
     temp_dir = experiment_root / "temp_results"
     output_path = experiment_root / "results.csv"
+    lock_path = experiment_root / "results.csv.lock"
 
+    if not temp_dir.is_dir() or not any(temp_dir.glob("run_*.csv")):
+        return
+
+    # simple spin-lock
+    max_retries = 100
+    for _ in range(max_retries):
+        try:
+            with open(lock_path, "x"):
+                # Lock acquired
+                try:
+                    _perform_aggregation(temp_dir, output_path)
+                finally:
+                    if lock_path.exists():
+                        lock_path.unlink()
+                return
+        except FileExistsError:
+            # Lock held by another process
+            time.sleep(0.1)
+
+    # If we got here, we couldn't get the lock
+    raise RuntimeError(f"Could not acquire lock for results.csv at {lock_path} after {max_retries} retries.")
+
+
+def _perform_aggregation(temp_dir: Path, output_path: Path):
+    """Internal logic for result aggregation, called under lock."""
     all_rows = []
     fieldnames = [
         "run_id",
@@ -34,8 +62,7 @@ def aggregate_results(experiment_root: Path):
                 all_rows.append(row)
 
     # 2. Read temporary results
-    if temp_dir.is_dir():
-        _load_temp_results(temp_dir, all_rows)
+    merged_files = _load_temp_results(temp_dir, all_rows)
 
     if not all_rows:
         return
@@ -48,21 +75,35 @@ def aggregate_results(experiment_root: Path):
         writer.writeheader()
         writer.writerows(all_rows)
 
-    # Cleanup temp dir if it exists
-    if temp_dir.is_dir():
+    # 3. Cleanup processed temporary files
+    for file_path in merged_files:
+        try:
+            file_path.unlink()
+        except FileNotFoundError:
+            pass
+
+    # Cleanup temp dir if it's empty
+    if temp_dir.is_dir() and not any(temp_dir.iterdir()):
         shutil.rmtree(temp_dir)
 
 
-def _load_temp_results(temp_dir: Path, all_rows: list):
-    """Loads temporary CSV files and appends new rows to all_rows."""
+def _load_temp_results(temp_dir: Path, all_rows: list) -> list[Path]:
+    """Loads temporary CSV files and appends new rows to all_rows. Returns list of merged files."""
+    merged_files = []
     for file_path in temp_dir.glob("run_*.csv"):
         with open(file_path, "r", newline="") as f:
             reader = csv.DictReader(f)
+            row_count = 0
             for row in reader:
                 _coerce_row_types(row)
                 # Avoid duplicates if we somehow re-ran a run that was already in results.csv
                 if not any(r["run_id"] == row["run_id"] and r["regime"] == row["regime"] for r in all_rows):
                     all_rows.append(row)
+                row_count += 1
+
+            if row_count > 0:
+                merged_files.append(file_path)
+    return merged_files
 
 
 def _coerce_row_types(row: dict):
