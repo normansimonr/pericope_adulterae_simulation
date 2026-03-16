@@ -1,7 +1,6 @@
 from typing import Dict, Optional
 
 import numpy as np
-from scipy.spatial import KDTree
 
 from pasim.config.schema import SimulationConfig
 from pasim.core.genealogy_snapshot import GenealogyNode, GenealogySnapshot
@@ -25,73 +24,21 @@ class TextReplayEngine:
         self.intervention_applied = False
         self.innovator_id: Optional[str] = self._select_innovator()
 
-    def _get_numeric_id(self, node_id: str) -> int:
-        """Helper to get numeric part of ID for deterministic tie-breaking."""
-        try:
-            return int(node_id[1:])
-        except (ValueError, TypeError):
-            return hash(node_id)
-
-    def _get_eligible_nodes(self) -> list[GenealogyNode]:
-        """Filters nodes eligible for PA intervention based on year and region."""
-        eligible_nodes = [
-            n
-            for n in self.snapshot.nodes
-            if n.birth_tick == self.config.pa_intervention_year and n.region == self.config.pa_intervention_region
-        ]
-
-        if not eligible_nodes:
-            raise RuntimeError(
-                f"No eligible nodes found for PA intervention at year {self.config.pa_intervention_year} "
-                f"in region {self.config.pa_intervention_region.value}"
-            )
-        return eligible_nodes
-
-    def _get_reference_nodes(self, eligible_nodes: list[GenealogyNode]) -> list[GenealogyNode]:
-        """Filters nodes alive at the intervention year in the same region."""
-        reference_nodes = [
-            n
-            for n in self.snapshot.nodes
-            if n.birth_tick <= self.config.pa_intervention_year < n.death_tick and n.region == self.config.pa_intervention_region
-        ]
-
-        if not reference_nodes:
-            return eligible_nodes
-        return reference_nodes
-
-    def _find_best_innovator(self, eligible_nodes: list[GenealogyNode], reference_nodes: list[GenealogyNode]) -> str:
-        """Finds the node with the highest neighbor count among eligible nodes."""
-        ref_locations = np.array([n.location for n in reference_nodes])
-        tree = KDTree(ref_locations)
-
-        best_node_id = None
-        max_count = -1
-
-        for node in eligible_nodes:
-            count = len(tree.query_ball_point(node.location, r=self.config.pa_intervention_radius))
-            node_numeric_id = self._get_numeric_id(node.instance_id)
-
-            if count > max_count:
-                max_count = count
-                best_node_id = node.instance_id
-            elif count == max_count:
-                if best_node_id is None or node_numeric_id < self._get_numeric_id(best_node_id):
-                    best_node_id = node.instance_id
-
-        if best_node_id is None:
-            raise RuntimeError("Failed to select an innovator node.")
-
-        return best_node_id
-
-    def _select_innovator(self) -> str:
+    def _select_innovator(self) -> Optional[str]:
         """
-        Deterministically selects the innovator node for PA intervention.
-        The innovator is the node at the intervention year and region with
-        the highest neighbor count.
+        Finds the innovator node for the current PA regime by looking for the
+        pre-assigned tag in the genealogy snapshot.
         """
-        eligible_nodes = self._get_eligible_nodes()
-        reference_nodes = self._get_reference_nodes(eligible_nodes)
-        return self._find_best_innovator(eligible_nodes, reference_nodes)
+        current_regime = self.config.pa_regime
+        for node in self.snapshot.nodes:
+            if current_regime in node.pa_intervention_regimes:
+                return node.instance_id
+
+        # If not found, it's a critical error.
+        raise RuntimeError(
+            f"No eligible nodes found for PA intervention at year {self.config.pa_intervention_year} "
+            f"in region {self.config.pa_intervention_region.value}"
+        )
 
     def run(self) -> Dict[str, np.ndarray]:
         """
@@ -118,8 +65,7 @@ class TextReplayEngine:
         # Guarantee single execution: check if intervention was applied
         if not self.intervention_applied:
             raise RuntimeError(
-                f"Intervention was not applied despite replay completing. "
-                f"Target year: {self.config.pa_intervention_year}, target ID: {self.innovator_id}"
+                f"Intervention was not applied despite replay completing. Regime: {self.config.pa_regime}, target ID: {self.innovator_id}"
             )
 
         return self.instance_texts

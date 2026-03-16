@@ -16,7 +16,7 @@ To accurately model textual transmission, the simulation distinguishes between s
 
 -   **Witness**: Represents the textual content found within a specific manuscript. A Manuscript owns exactly one Witness. A Witness has its own unique ID and is linked to its parent Manuscript. Witnesses are tracked in a `WitnessRegistry`.
 
--   **Witness Instance / Genealogy Node**: This is an abstract representation in the genealogy graph. Each Witness has exactly one Witness Instance, which corresponds to a node in the `networkx` graph. A `GenealogyNode` (defined in `core/genealogy_snapshot.py`) captures the essential demographic metadata for a single instance, including its `instance_id`, `birth_tick`, `death_tick`, `parent_ids`, `region`, `material`, `script`, `reputation`, and `location`. This structure allows for the complete decoupling of the demographic simulation from the textual evolution.
+-   **Witness Instance / Genealogy Node**: This is an abstract representation in the genealogy graph. Each Witness has exactly one Witness Instance, which corresponds to a node in the `networkx` graph. A `GenealogyNode` (defined in `core/genealogy_snapshot.py`) captures the essential demographic metadata for a single instance, including its `instance_id`, `birth_tick`, `death_tick`, `parent_ids`, `region`, `material`, `script`, `reputation`, `location`, and a list of `pa_intervention_regimes`. This structure allows for the complete decoupling of the demographic simulation from the textual evolution.
 
 -   **Genealogy Snapshot**: A `GenealogySnapshot` is a serialisable collection of `GenealogyNode` objects. It represents the full structural and demographic history of a simulation run, containing everything required to replay textual transmission deterministically without re-running the demographic layer. It contains no textual data. This allows the demographic "scaffold" to be generated once and then used for multiple textual experiments (e.g., dual-regime comparison).
 
@@ -44,7 +44,7 @@ A core architectural principle of `pasim` is the separation of the demographic h
 
 The Pericope Adulterae (PA) intervention is a unique textual event that occurs once per simulation run within each regime.
 
--   **Deterministic Innovator Selection**: To ensure reproducibility and scientific rigor, the "innovator" (the node that introduces the textual change) is selected deterministically from the `GenealogySnapshot`. Among all nodes born at the `pa_intervention_year` in the `pa_intervention_region`, the one with the highest local manuscript density (number of neighbors within a fixed `PA_INTERVENTION_RADIUS`) is chosen. Ties are broken using the lowest numeric `instance_id`.
+-   **Deterministic Innovator Selection**: To ensure reproducibility and scientific rigor, the "innovator" (the node that introduces the textual change) is selected deterministically and tagged within the demographic generation phase at the moment of birth. Among all nodes born at the `pa_intervention_year` in the `pa_intervention_region`, the one with the highest local manuscript density (number of neighbors within a fixed `PA_INTERVENTION_RADIUS`) is chosen. Ties are broken using the lowest numeric `instance_id`.
 -   **Textual Change**:
     -   In the **Insertion** regime, the autograph is all `0`s (textual absence), and the innovator introduces the passage (all `1`s).
     -   In the **Omission** regime, the autograph is all `1`s (textual presence), and the innovator removes the passage (all `0`s).
@@ -159,6 +159,7 @@ The simulation is split into two distinct functional layers to ensure modularity
 Responsible for all non-textual aspects of the simulation:
 - Demand generation and manuscript spawning.
 - **Force-Spawning**: Guaranteed creation of at least one new manuscript at the `pa_intervention_year` and `pa_intervention_region` (and any per-regime overrides) to ensure an innovator node is always available for the textual intervention, provided regional demand is non-zero.
+- **Innovator Tagging**: Identifies and tags the innovator node(s) at birth for all active regimes, ensuring the selection is fixed for the subsequent textual replay.
 - Manuscript lifecycles (birth, natural death, and destruction).
 - Parent selection for new copies.
 - Region, material, script, and reputation assignment.
@@ -184,6 +185,7 @@ Immediately after persisting the sampled witnesses for a given regime, the simul
 
 #### 4. Text Replay Layer
 Given a `GenealogySnapshot`, a textual regime (insertion/omission), and a seed, this layer:
+- Identifies the innovator using the pre-assigned tags in the snapshot.
 - Initializes the autograph text based on the regime.
 - Traverses nodes in birth order.
 - Applies copying (majority voting) and mutation rules.

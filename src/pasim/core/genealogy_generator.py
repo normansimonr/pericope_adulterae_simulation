@@ -44,7 +44,7 @@ Explicit Exclusions:
 import logging
 import time
 from math import ceil
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 from numpy.random import Generator as RNG
@@ -403,6 +403,7 @@ def _spawn_new_manuscripts_from_demand(
     kdtree_by_region, alive_by_region_objects = _get_regional_alive_data(state)
     intervention_targets = _get_intervention_targets(params)
 
+    spawned_this_tick: List[str] = []
     for region, demanded_count in demand_today.items():
         stock_count = len(state.alive_by_region[region])
         n_to_spawn = demanded_count - stock_count
@@ -457,8 +458,103 @@ def _spawn_new_manuscripts_from_demand(
             state.alive_by_region[region].add(manuscript_id)
             state.manuscript_to_instance_map[manuscript_id] = instance_id
             state.instance_reputations[instance_id] = reputation
+            spawned_this_tick.append(instance_id)
+
+    # RULE: Deterministic Innovator Selection
+    # If this tick matches any PA intervention year, identify and tag the innovator nodes.
+    _tag_innovator_nodes(state, spawned_this_tick, params)
 
     return state
+
+
+def _tag_innovator_nodes(state: GenerationState, spawned_ids: List[str], config: SimulationConfig) -> None:
+    """Identifies and tags the innovator node for each active PA regime."""
+    if not spawned_ids:
+        return
+
+    targets = _get_intervention_targets_by_regime(config)
+
+    # Filter to regimes that have a target today
+    active_regimes = {regime: target for regime, target in targets.items() if state.tick == target[0]}
+    if not active_regimes:
+        return
+
+    # Group spawned nodes by region for efficient lookup
+    spawned_by_region = _group_spawned_by_region(state, spawned_ids)
+
+    for regime, (_, target_region) in active_regimes.items():
+        eligible_ids = spawned_by_region.get(target_region, [])
+        if eligible_ids:
+            _apply_innovator_tag(state, regime, eligible_ids, target_region, config)
+
+
+def _group_spawned_by_region(state: GenerationState, spawned_ids: List[str]) -> Dict[Region, List[str]]:
+    """Groups spawned instance IDs by their birth region."""
+    spawned_by_region: Dict[Region, List[str]] = {}
+    for inst_id in spawned_ids:
+        ms_id = state.graph.nodes[inst_id]["manuscript_id"]
+        region = state.registries.manuscripts.get(ms_id).region
+        spawned_by_region.setdefault(region, []).append(inst_id)
+    return spawned_by_region
+
+
+def _apply_innovator_tag(
+    state: GenerationState, regime: str, eligible_ids: List[str], target_region: Region, config: SimulationConfig
+) -> None:
+    """Selects and tags the innovator for a specific regime."""
+    best_id = _select_innovator_for_regime(state, eligible_ids, target_region, config)
+    if best_id:
+        if "pa_intervention_regimes" not in state.graph.nodes[best_id]:
+            state.graph.nodes[best_id]["pa_intervention_regimes"] = []
+        state.graph.nodes[best_id]["pa_intervention_regimes"].append(regime)
+
+
+def _get_intervention_targets_by_regime(config: SimulationConfig) -> Dict[str, Tuple[int, Region]]:
+    """Generates the (year, region) target for each PA regime."""
+    targets: Dict[str, Tuple[int, Region]] = {
+        "insertion": (config.pa_intervention_year, config.pa_intervention_region),
+        "omission": (config.pa_intervention_year, config.pa_intervention_region),
+    }
+
+    if config.pa_regime_configs:
+        for regime in ["insertion", "omission"]:
+            # Explicitly cast to the Literal required by the Pydantic field's keys
+            r_key = cast(Literal["insertion", "omission"], regime)
+            if r_key in config.pa_regime_configs:
+                cfg = config.pa_regime_configs[r_key]
+                targets[regime] = (cfg.pa_intervention_year, cfg.pa_intervention_region)
+
+    return targets
+
+
+def _select_innovator_for_regime(
+    state: GenerationState, eligible_ids: List[str], target_region: Region, config: SimulationConfig
+) -> Optional[str]:
+    """Selects the best innovator from a pool of eligible nodes based on density."""
+    # Find nodes born in the same region (reference pool for density)
+    reference_ms_ids = list(state.alive_by_region[target_region])
+    reference_locations = np.array([state.registries.manuscripts.get(ms_id).location for ms_id in reference_ms_ids])
+    ref_tree = KDTree(reference_locations)
+
+    best_id = None
+    max_density = -1
+
+    # We must ensure we sort eligible_ids to be deterministic for tie-breaking
+    for inst_id in sorted(eligible_ids):
+        ms_id = state.graph.nodes[inst_id]["manuscript_id"]
+        loc = state.registries.manuscripts.get(ms_id).location
+        # Density = number of neighbors within radius
+        density = ref_tree.query_ball_point(loc, r=config.pa_intervention_radius, return_length=True)
+
+        if density > max_density:
+            max_density = density
+            best_id = inst_id
+        elif density == max_density:
+            # Tie-break: lowest numeric ID
+            if best_id is None or int(inst_id[1:]) < int(best_id[1:]):
+                best_id = inst_id
+
+    return best_id
 
 
 def advance_tick(
@@ -583,6 +679,7 @@ def extract_genealogy_snapshot(state: GenerationState) -> GenealogySnapshot:
                 script=witness.script,
                 reputation=node_data["reputation"],
                 location=manuscript.location,
+                pa_intervention_regimes=node_data.get("pa_intervention_regimes", []),
             )
         )
 

@@ -19,6 +19,7 @@ class GenealogyNode:
     script: Script
     reputation: int
     location: Tuple[float, float]
+    pa_intervention_regimes: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -43,6 +44,7 @@ class GenealogySnapshot:
                     "script": node.script.value,
                     "reputation": node.reputation,
                     "location": node.location,
+                    "pa_intervention_regimes": node.pa_intervention_regimes,
                 }
                 for node in self.nodes
             ]
@@ -65,6 +67,7 @@ class GenealogySnapshot:
                     script=Script(node["script"]),
                     reputation=node["reputation"],
                     location=tuple(node["location"]),  # type: ignore
+                    pa_intervention_regimes=node.get("pa_intervention_regimes", []),
                 )
                 for node in data["nodes"]
             ]
