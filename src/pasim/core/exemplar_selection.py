@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from numpy.random import Generator as RNG
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree  # type: ignore
 
 from pasim.config.schema import SimulationConfig
 from pasim.core.genealogy import GenealogyGraph

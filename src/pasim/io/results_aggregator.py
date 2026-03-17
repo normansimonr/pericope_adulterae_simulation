@@ -90,15 +90,19 @@ def _perform_aggregation(temp_dir: Path, output_path: Path):
 def _load_temp_results(temp_dir: Path, all_rows: list) -> list[Path]:
     """Loads temporary CSV files and appends new rows to all_rows. Returns list of merged files."""
     merged_files = []
+    # Use a set of (run_id, regime) tuples for O(N) duplicate checking
+    existing_keys = {(row["run_id"], row["regime"]) for row in all_rows}
+
     for file_path in temp_dir.glob("run_*.csv"):
         with open(file_path, "r", newline="") as f:
             reader = csv.DictReader(f)
             row_count = 0
             for row in reader:
                 _coerce_row_types(row)
-                # Avoid duplicates if we somehow re-ran a run that was already in results.csv
-                if not any(r["run_id"] == row["run_id"] and r["regime"] == row["regime"] for r in all_rows):
+                key = (row["run_id"], row["regime"])
+                if key not in existing_keys:
                     all_rows.append(row)
+                    existing_keys.add(key)
                 row_count += 1
 
             if row_count > 0:

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import yaml
 
-from pasim.execution.runner import run_single
+from pasim.execution.runner import SimulationResult, run_single
 
 # Minimal configuration for fast testing
 MINIMAL_PARAMS_YAML = """
@@ -308,6 +308,7 @@ class TestPersistence:
         # Capture state properties *after* the simulation but *before* potential modification
         # from persistence (i.e., from the returned result object).
         result_before_rechecking = run_single(str(params_path), seed=seed)
+        assert isinstance(result_before_rechecking, SimulationResult)
 
         # Hash instance_text arrays
         original_instance_text_hashes = {
@@ -365,6 +366,7 @@ class TestPersistence:
         params_file.write_text(self._get_params_with_persecution())
 
         result = run_single(str(params_file), seed=10)  # Use a different seed
+        assert isinstance(result, SimulationResult)
         run_dir = temp_experiment_folder / "runs" / "run_0"  # Derive run_dir from temp_experiment_folder
 
         with open(run_dir / "events.log", "r") as f:

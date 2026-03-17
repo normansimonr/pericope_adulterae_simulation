@@ -27,7 +27,7 @@ def _run_wrapper(
             # We explicitly discard the full in-memory result object here
             # to prevent it from being pickled and sent back to the main process,
             # which can cause massive memory spikes for large graphs.
-            # All critical data is already persisted to disk.
+            # All critical data is already persisted to disk or temp CSVs.
             run_single(
                 params_path=params_path,
                 seed=run_spec.seed,
@@ -85,7 +85,6 @@ def run_parallel(
         return {"successful_runs": 0, "failed_runs": 0, "failure_records": [], "total_runs_attempted": 0}
 
     run_plan = generate_run_plan(n_runs, seed=seed, skip_run_ids=skip_run_ids)
-
     if not run_plan:
         return {
             "successful_runs": 0,
@@ -95,42 +94,53 @@ def run_parallel(
             "total_requested_runs": n_runs,
         }
 
-    successful_runs_count = 0
-    failed_runs_count = 0
-    failure_records: List[Dict[str, Any]] = []
-
     if num_processes is None:
         num_processes = os.cpu_count() or 1
+
+    results = _execute_run_plan(params_path, run_plan, max_retries, num_processes, persistence_level)
+
+    return {
+        "successful_runs": results["successful"],
+        "failed_runs": results["failed"],
+        "failure_records": results["records"],
+        "total_runs_attempted": n_runs,
+        "total_requested_runs": n_runs,
+    }
+
+
+def _execute_run_plan(
+    params_path: str, run_plan: List[RunSpec], max_retries: int, num_processes: int, persistence_level: str
+) -> Dict[str, Any]:
+    """Executes the run plan using a process pool and collects results."""
+    successful_count = 0
+    failed_count = 0
+    failure_records: List[Dict[str, Any]] = []
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
         futures = {executor.submit(_run_wrapper, params_path, spec, None, max_retries, persistence_level): spec for spec in run_plan}
 
+        finished_count = 0
         for future in as_completed(futures):
             run_spec = futures[future]
             try:
                 result_data = future.result()
                 success, record = _process_run_result(run_spec, result_data)
                 if success:
-                    successful_runs_count += 1
+                    successful_count += 1
                 else:
-                    failed_runs_count += 1
+                    failed_count += 1
                     failure_records.append(record)
 
-                # Aggregation: Update results.csv after each run (if in minimal mode)
-                aggregate_results(Path(params_path).parent)
+                finished_count += 1
+                if finished_count % 10 == 0:
+                    aggregate_results(Path(params_path).parent)
 
             except Exception as exc:
-                failed_runs_count += 1
+                failed_count += 1
                 failure_records.append({"run_id": run_spec.run_id, "seed": run_spec.seed, "error": str(exc), "attempt": 0})
                 logger.critical(f"Run {run_spec.run_id} (seed: {run_spec.seed}) unhandled exception: {exc}")
 
-    return {
-        "successful_runs": successful_runs_count,
-        "failed_runs": failed_runs_count,
-        "failure_records": failure_records,
-        "total_runs_attempted": n_runs,
-        "total_requested_runs": n_runs,
-    }
+    return {"successful": successful_count, "failed": failed_count, "records": failure_records}
 
 
 def _process_run_result(run_spec: RunSpec, result_data: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:

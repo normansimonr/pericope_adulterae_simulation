@@ -6,11 +6,14 @@ and reproducibly.
 """
 
 import copy
-from typing import Dict, List
+from typing import Any, Dict, List, cast
 
 import numpy as np
 
 from pasim.config.schema import (
+    DemandScheduleConfig,
+    MaterialTransitionConfig,
+    ScriptTransitionConfig,
     SimulationConfig,
 )
 from pasim.core.genealogy import add_root_node
@@ -118,12 +121,17 @@ def test_persecution_correctness(state_collector_fixture: List[GenerationState])
         text_length=100,
         p_region_migration=0.0,
         p_internal_relocation=0.0,
+        p_uncial_exemplar_death_on_minuscule_birth=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule={0: 0},
+        geographical_candidate_pool_size=10,
+        pa_intervention_radius=10.0,
+        demand_schedule=DemandScheduleConfig({0: 0}),
         pa_regime="insertion",
         pa_intervention_year=0,
-        pa_intervention_region="Asia Minor",
+        pa_intervention_region=Region.ASIA_MINOR,
         pa_innovator_reputation=5.0,
+        log_tick_frequency=100,
+        validation_frequency=0,
     )
 
     # 1. Initialize state with manuscripts in two regions
@@ -186,12 +194,17 @@ def test_persecution_determinism(state_collector_fixture: List[GenerationState])
         text_length=100,
         p_region_migration=0.0,
         p_internal_relocation=0.0,
+        p_uncial_exemplar_death_on_minuscule_birth=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule={0: 0},
+        geographical_candidate_pool_size=10,
+        pa_intervention_radius=10.0,
+        demand_schedule=DemandScheduleConfig({0: 0}),
         pa_regime="insertion",
         pa_intervention_year=0,
-        pa_intervention_region="Asia Minor",
+        pa_intervention_region=Region.ASIA_MINOR,
         pa_innovator_reputation=5.0,
+        log_tick_frequency=100,
+        validation_frequency=0,
     )
 
     # --- Run 1 with seed 123 ---
@@ -240,21 +253,26 @@ def test_material_transition(state_collector_fixture: List[GenerationState]):
     script_schedule = [{"start_tick": 0, "distribution": {"uncial": 1.0}}]
     script_manager = ScriptTransitionManager(script_schedule)
 
-    dummy_config_data = {
-        "total_ticks": 10,
-        "p_region_migration": 0.0,
-        "p_internal_relocation": 0.0,
-        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        "pa_regime": "insertion",
-        "pa_intervention_year": 5,
-        "pa_intervention_region": "Asia Minor",
-        "pa_innovator_reputation": 5.0,
-        "persecutions": [],
-        "material_transitions": material_schedule,
-        "script_transitions": script_schedule,
-        "demand_schedule": {0: 2, 6: 3},
-    }
-    dummy_simulation_config = SimulationConfig(**dummy_config_data)
+    dummy_simulation_config = SimulationConfig(
+        total_ticks=10,
+        text_length=100,
+        p_region_migration=0.0,
+        p_internal_relocation=0.0,
+        p_uncial_exemplar_death_on_minuscule_birth=0.0,
+        reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
+        geographical_candidate_pool_size=10,
+        pa_intervention_radius=10.0,
+        pa_regime="insertion",
+        pa_intervention_year=5,
+        pa_intervention_region=Region.ASIA_MINOR,
+        pa_innovator_reputation=5.0,
+        persecutions=[],
+        material_transitions=[MaterialTransitionConfig(**cast(Any, m)) for m in material_schedule],
+        script_transitions=[ScriptTransitionConfig(**cast(Any, s)) for s in script_schedule],
+        demand_schedule=DemandScheduleConfig({0: 2, 6: 3}),
+        log_tick_frequency=100,
+        validation_frequency=0,
+    )
 
     rng_context = RNGContext(seed=42)
     rng = rng_context.spawn(1)[0]
@@ -308,21 +326,26 @@ def test_script_transition(state_collector_fixture: List[GenerationState]):
     material_schedule = [{"start_tick": 0, "distribution": {"parchment": 1.0}}]
     material_manager = MaterialTransitionManager(material_schedule)
 
-    dummy_config_data = {
-        "total_ticks": 10,
-        "p_region_migration": 0.0,
-        "p_internal_relocation": 0.0,
-        "reputation_distribution": {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        "pa_regime": "insertion",
-        "pa_intervention_year": 5,
-        "pa_intervention_region": "Asia Minor",
-        "pa_innovator_reputation": 5.0,
-        "persecutions": [],
-        "material_transitions": material_schedule,
-        "script_transitions": script_schedule,
-        "demand_schedule": {0: 2, 6: 3},
-    }
-    dummy_simulation_config = SimulationConfig(**dummy_config_data)
+    dummy_simulation_config = SimulationConfig(
+        total_ticks=10,
+        text_length=100,
+        p_region_migration=0.0,
+        p_internal_relocation=0.0,
+        p_uncial_exemplar_death_on_minuscule_birth=0.0,
+        reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
+        geographical_candidate_pool_size=10,
+        pa_intervention_radius=10.0,
+        pa_regime="insertion",
+        pa_intervention_year=5,
+        pa_intervention_region=Region.ASIA_MINOR,
+        pa_innovator_reputation=5.0,
+        persecutions=[],
+        material_transitions=[MaterialTransitionConfig(**cast(Any, m)) for m in material_schedule],
+        script_transitions=[ScriptTransitionConfig(**cast(Any, s)) for s in script_schedule],
+        demand_schedule=DemandScheduleConfig({0: 2, 6: 3}),
+        log_tick_frequency=100,
+        validation_frequency=0,
+    )
 
     rng_context = RNGContext(seed=42)
     rng = rng_context.spawn(1)[0]
@@ -376,12 +399,17 @@ def test_migration_determinism(state_collector_fixture: List[GenerationState]):
             text_length=100,
             p_region_migration=0.5,
             p_internal_relocation=0.5,
+            p_uncial_exemplar_death_on_minuscule_birth=0.0,
             reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-            demand_schedule={0: 0},
+            geographical_candidate_pool_size=10,
+            pa_intervention_radius=10.0,
+            demand_schedule=DemandScheduleConfig({0: 0}),
             pa_regime="insertion",
             pa_intervention_year=0,
-            pa_intervention_region="Asia Minor",
+            pa_intervention_region=Region.ASIA_MINOR,
             pa_innovator_reputation=5.0,
+            log_tick_frequency=100,
+            validation_frequency=0,
         )
         rng_context = RNGContext(seed=seed)
         rng = rng_context.spawn(1)[0]
@@ -412,12 +440,17 @@ def test_event_ordering_stability(state_collector_fixture: List[GenerationState]
         text_length=100,
         p_region_migration=0.0,
         p_internal_relocation=0.0,
+        p_uncial_exemplar_death_on_minuscule_birth=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule={0: 0},
+        geographical_candidate_pool_size=10,
+        pa_intervention_radius=10.0,
+        demand_schedule=DemandScheduleConfig({0: 0}),
         pa_regime="insertion",
         pa_intervention_year=0,
-        pa_intervention_region="Asia Minor",
+        pa_intervention_region=Region.ASIA_MINOR,
         pa_innovator_reputation=5.0,
+        log_tick_frequency=100,
+        validation_frequency=0,
     )
 
     def run_with_order(order: list, seed: int, state_collector: List[GenerationState]) -> set:
@@ -444,12 +477,17 @@ def test_manager_independence(state_collector_fixture: List[GenerationState]):
         text_length=100,
         p_region_migration=0.0,
         p_internal_relocation=0.0,
+        p_uncial_exemplar_death_on_minuscule_birth=0.0,
         reputation_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
-        demand_schedule={0: 0},
+        geographical_candidate_pool_size=10,
+        pa_intervention_radius=10.0,
+        demand_schedule=DemandScheduleConfig({0: 0}),
         pa_regime="insertion",
         pa_intervention_year=0,
-        pa_intervention_region="Asia Minor",
+        pa_intervention_region=Region.ASIA_MINOR,
         pa_innovator_reputation=5.0,
+        log_tick_frequency=100,
+        validation_frequency=0,
     )
     rng_context = RNGContext(seed=1)
     rng = rng_context.spawn(1)[0]

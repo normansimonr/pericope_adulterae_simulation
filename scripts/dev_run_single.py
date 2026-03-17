@@ -15,10 +15,11 @@ from pasim.analysis.inspection import (
     manuscript_table,
     node_table,
 )
-from pasim.execution.runner import run_single
+from pasim.execution.runner import SimulationResult, run_single
 
 # Execute the baseline experiment with a fixed seed for reproducibility
 result = run_single("experiments/exp001_baseline/params.yaml", seed=42)
+assert isinstance(result, SimulationResult)
 
 # Print a summary of the results for quick inspection
 print("--- Simulation Run Summary ---")

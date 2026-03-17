@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 from numpy.random import Generator as RNG
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree  # type: ignore
 
 from pasim.config.schema import SimulationConfig
 from pasim.core.exemplar_selection import select_exemplars
@@ -76,6 +76,9 @@ def _get_regional_distribution_for_century(century: int, config: SimulationConfi
         target_key = "3-5"
 
     dist_map = distributions.get(target_key, distributions.get("6+"))
+    if dist_map is None:
+        # Fallback if somehow 6+ is also missing
+        return {Region.ASIA_MINOR: 1.0}
 
     # Map string keys to Region enum
     return {Region(k): v for k, v in dist_map.items()}
@@ -159,7 +162,7 @@ def _migrate_between_regions(
         old_region = manuscript.region
         other_regions = [r for r in Region if r != old_region]
         if other_regions:
-            new_region = rng.choice(other_regions)
+            new_region = rng.choice(cast(Any, other_regions))
             manuscript.region = new_region
             manuscript.location = generate_random_coordinates(new_region, rng, config)
 
@@ -267,14 +270,16 @@ def _generate_batch_spawn_properties(
 
     # Vectorized lifespan generation
     batch_lifespans = np.zeros(n_to_spawn, dtype=int)
-    for mat in material_dist["materials"]:
-        mask = batch_materials == mat
-        if np.any(mask):
-            from .lifespan import _get_lognormal_params
+    lp = params.lifespan_parameters
+    if lp:
+        for mat in material_dist["materials"]:
+            mask = batch_materials == mat
+            if np.any(mask):
+                from .lifespan import _get_lognormal_params
 
-            mu, sigma = _get_lognormal_params(mat, region, params)
-            lifespans = rng.lognormal(mean=mu, sigma=sigma, size=np.sum(mask))
-            batch_lifespans[mask] = np.maximum(1, np.floor(lifespans)).astype(int)
+                mu, sigma = _get_lognormal_params(mat, region, params)
+                lifespans = rng.lognormal(mean=mu, sigma=sigma, size=np.sum(mask))
+                batch_lifespans[mask] = np.maximum(1, np.floor(lifespans)).astype(int)
 
     return {
         "locations_x": locations_x,
@@ -425,6 +430,7 @@ def _spawn_new_manuscripts_from_demand(
         for i in range(n_to_spawn):
             manuscript_id = f"M{next(state.manuscript_id_counter)}"
             reputation = int(props["reputations"][i])
+
             manuscript = Manuscript(
                 manuscript_id=manuscript_id,
                 birth_tick=current_tick,

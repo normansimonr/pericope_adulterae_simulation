@@ -8,7 +8,7 @@ for both textual replay regimes.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, cast
+from typing import Any, Dict, List, Literal, Optional, Union, cast
 
 import networkx as nx
 import numpy as np
@@ -122,12 +122,25 @@ def _resolve_run_context(params_path_obj: Path, run_id: Optional[int], persisten
     return resolved_run_id, run_dir
 
 
+@dataclass
+class MinimalSimulationResult:
+    """
+    A memory-efficient container for simulation results.
+    Used in 'minimal' persistence mode to avoid holding large graph/state objects.
+    """
+
+    run_id: int
+    seed: int
+    survivor_sampling_result: SamplingResult
+    replays: Dict[str, ReplayResult] = field(default_factory=dict)
+
+
 def _run_regime_replay(
     regime: str,
     config: SimulationConfig,
     seed: int,
     snapshot: GenealogySnapshot,
-    result: SimulationResult,
+    result: Union[SimulationResult, MinimalSimulationResult],
     persistence_level: str,
     run_dir: Optional[Path],
     params_path_obj: Path,
@@ -150,27 +163,20 @@ def _run_regime_replay(
     regime_config = config.model_copy(update=update_params)
     replay_seed = derive_replay_seed(seed, regime)
     replay_engine = TextReplayEngine(regime_config, snapshot, replay_seed)
-    replayed_texts = replay_engine.run()
 
-    # Identifiers
-    survivor_ids = result.survivor_sampling_result.sampled_witness_ids
-    all_witness_ids = list(replayed_texts.keys())
-    # The autograph is the only node with no parents
-    autograph_id = next(n.instance_id for n in snapshot.nodes if not n.parent_ids)
-    ideal_witness_ids = [wid for wid in all_witness_ids if wid != autograph_id]
+    # Use memory-efficient replay if we don't need full persistence
+    survivor_ids = set(result.survivor_sampling_result.sampled_witness_ids)
+    return_all = persistence_level == "full"
+    replayed_texts = replay_engine.run(survivor_ids=survivor_ids, return_all_texts=return_all)
 
-    # Genomes
-    survivor_genomes = [replayed_texts[sid] for sid in survivor_ids if sid in replayed_texts]
-    all_genomes = list(replayed_texts.values())
-    ideal_genomes = [replayed_texts[wid] for wid in ideal_witness_ids]
-
-    # Majority texts
-    majority_segments = compute_majority_text(survivor_genomes)
-    ideal_majority_segments = compute_majority_text(ideal_genomes)
-
-    # Autograph for comparison
-    autograph_text = replayed_texts[autograph_id]
+    # Metrics from on-the-fly tracking
+    ideal_metrics = replay_engine.get_ideal_metrics()
+    autograph_text = ideal_metrics["autograph_text"]
     text_length = config.text_length
+
+    # Majority text of survivors
+    survivor_genomes = [replayed_texts[sid] for sid in survivor_ids if sid in replayed_texts]
+    majority_segments = compute_majority_text(survivor_genomes)
 
     # Metrics
     # 1. Percent of Sampled Witnesses Containing the PA
@@ -181,32 +187,26 @@ def _run_regime_replay(
 
     # 2. Percent of Majority Text Segments Disagreeing with the Autograph
     pct_majority_disagree = None
-    if majority_segments:
+    if majority_segments and autograph_text is not None:
         majority_array = np.array(majority_segments, dtype=np.int16)
         disagree_count = np.sum(majority_array != autograph_text)
         pct_majority_disagree = disagree_count / text_length
 
-    # 3. Percent of All Witnesses That Contain the PA
-    pct_all_with_pa = None
-    if all_genomes:
-        count_all_with_pa = sum(1 for g in all_genomes if np.any(g != 0))
-        pct_all_with_pa = count_all_with_pa / len(all_genomes)
+    # 3. Percent of All Witnesses That Contain the PA (from incremental tracker)
+    pct_all_with_pa = ideal_metrics["pct_all_witnesses_with_pa"]
 
-    # 4. Ideal Majority Text - computed above as ideal_majority_segments
+    # 4. Ideal Majority Text (from incremental tracker)
+    ideal_majority_segments = ideal_metrics["ideal_majority_text_segments"]
 
-    # 5. Percent of Ideal Majority Segments Disagreeing with the Autograph
-    pct_ideal_majority_disagree = None
-    if ideal_majority_segments:
-        ideal_majority_array = np.array(ideal_majority_segments, dtype=np.int16)
-        ideal_disagree_count = np.sum(ideal_majority_array != autograph_text)
-        pct_ideal_majority_disagree = ideal_disagree_count / text_length
+    # 5. Percent of Ideal Majority Segments Disagreeing with Autograph (from incremental tracker)
+    pct_ideal_majority_disagree = ideal_metrics["pct_ideal_majority_disagree_autograph"]
 
     # The replay logic guarantees an innovator is found or it raises RuntimeError.
     assert replay_engine.innovator_id is not None
 
     result.replays[regime] = ReplayResult(
         pa_regime=regime,
-        instance_texts=replayed_texts,
+        instance_texts=replayed_texts,  # This is filtered if persistence_level != "full"
         seed=replay_seed,
         innovator_id=replay_engine.innovator_id,
         majority_text_segments=majority_segments,
@@ -218,6 +218,8 @@ def _run_regime_replay(
     )
 
     if persistence_level == "full" and run_dir:
+        # mypy: 'result' is SimulationResult because persistence_level == "full"
+        assert isinstance(result, SimulationResult)
         save_replay(result, run_dir, regime)
 
     write_temp_result(
@@ -242,36 +244,49 @@ def run_single(
     run_id: Optional[int] = None,
     regime: Optional[str] = None,
     attempt: int = 0,
-) -> SimulationResult:
+) -> Optional[Union[SimulationResult, MinimalSimulationResult]]:
     """
     Executes a single, in-memory simulation run.
-    It splits the run into demographic simulation and dual text replay
-    (insertion and omission regimes) over the same genealogy snapshot.
-    If a specific regime is provided, only that regime is replayed.
     """
     config = _validate_and_load_config(params_path)
-
     params_path_obj = Path(params_path)
     resolved_run_id, run_dir = _resolve_run_context(params_path_obj, run_id, persistence_level)
 
+    # 1. Run Demographics
     state, snapshot, sampling_result = _run_demographics(config, seed, run_id=resolved_run_id, attempt=attempt)
 
-    result = SimulationResult(
-        state=state,
-        graph=state.graph,
-        config=config,
-        seed=seed,
-        run_id=resolved_run_id,
-        genealogy_snapshot=snapshot,
-        survivor_sampling_result=sampling_result,
-    )
+    result: Union[SimulationResult, MinimalSimulationResult]
+    if persistence_level == "minimal":
+        # Create lightweight result and DISCARD the heavy state/graph immediately
+        result = MinimalSimulationResult(run_id=resolved_run_id, seed=seed, survivor_sampling_result=sampling_result)
+
+        # Explicitly clear heavy objects
+        del state
+        import gc
+
+        gc.collect()
+    else:
+        result = SimulationResult(
+            state=state,
+            graph=state.graph,
+            config=config,
+            seed=seed,
+            run_id=resolved_run_id,
+            genealogy_snapshot=snapshot,
+            survivor_sampling_result=sampling_result,
+        )
 
     if persistence_level == "full" and run_dir:
         if regime is None or regime == "insertion":
-            save_demographics(result, run_dir, params_path_obj)
+            # We know 'result' is a full SimulationResult here
+            save_demographics(cast(SimulationResult, result), run_dir, params_path_obj)
 
+    # 2. Run Text Replay
     target_regimes = [regime] if regime else ["insertion", "omission"]
     for r in target_regimes:
         _run_regime_replay(r, config, seed, snapshot, result, persistence_level, run_dir, params_path_obj)
+
+    if persistence_level == "minimal":
+        return None  # Still return None to prevent pickling back to main process
 
     return result

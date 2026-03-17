@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pasim.execution.runner import run_single
+from pasim.execution.runner import SimulationResult, run_single
 
 # Minimal configuration for testing dual-regime
 DUAL_REGIME_CONFIG = """
@@ -92,6 +92,7 @@ def test_dual_regime_identical_genealogy(temp_experiment_dir: Path):
     seed = 123
 
     result = run_single(str(params_path), seed=seed)
+    assert isinstance(result, SimulationResult)
 
     # The genealogy in the result object should be the same for both
     # (it's stored once in SimulationResult.graph)
@@ -109,6 +110,7 @@ def test_dual_regime_different_results(temp_experiment_dir: Path):
     seed = 999
 
     result = run_single(str(params_path), seed=seed)
+    assert isinstance(result, SimulationResult)
 
     insertion_texts = result.replays["insertion"].instance_texts
     omission_texts = result.replays["omission"].instance_texts
@@ -145,9 +147,11 @@ def test_dual_regime_reproducibility(temp_experiment_dir: Path):
 
     # Run 1
     result1 = run_single(str(params_path), seed=seed)
+    assert isinstance(result1, SimulationResult)
 
     # Run 2 (will be in directory '2')
     result2 = run_single(str(params_path), seed=seed)
+    assert isinstance(result2, SimulationResult)
 
     # Compare graphs
     assert list(result1.graph.nodes()) == list(result2.graph.nodes())

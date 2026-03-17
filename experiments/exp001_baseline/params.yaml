@@ -199,7 +199,7 @@ region_bounds:
 # regional_demand_distributions (Dict[str, Dict[str, float]], optional):
 # Defines how aggregate demand is distributed across regions for different centuries.
 regional_demand_distributions:
-  "0-2": {"Asia Minor": 0.70, "Levant": 0.25, "Egypt": 0.05}
+  "0-2": {"Asia Minor": 0.60, "Levant": 0.30, "Egypt": 0.10}
   "3-5": {"Asia Minor": 0.55, "Levant": 0.25, "Egypt": 0.20}
   "6+": {"Asia Minor": 1.00, "Levant": 0.00, "Egypt": 0.00}
 
@@ -213,7 +213,7 @@ geographical_candidate_pool_size: 10
 
 # pa_intervention_radius (float, optional): Radius used to calculate local density
 # when selecting the "innovator" node for PA intervention.
-pa_intervention_radius: 10.0
+pa_intervention_radius: 15.0
 
 # log_tick_frequency (int, optional): The frequency (in ticks) at which progress updates
 # are logged to the console. Defaults to 100.

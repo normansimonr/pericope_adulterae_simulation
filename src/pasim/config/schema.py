@@ -152,19 +152,19 @@ class SimulationConfig(BaseModel):
     lifespan_parameters: Dict[str, Dict[str, LifespanConfig]] = Field(
         default={
             "papyrus": {
-                "Asia Minor": {"mu": 4.72, "sigma": 0.30},
-                "Levant": {"mu": 4.72, "sigma": 0.30},
-                "Egypt": {"mu": 5.12, "sigma": 0.60},
+                "Asia Minor": LifespanConfig(mu=4.72, sigma=0.30),
+                "Levant": LifespanConfig(mu=4.72, sigma=0.30),
+                "Egypt": LifespanConfig(mu=5.12, sigma=0.60),
             },
             "parchment": {
-                "Asia Minor": {"mu": 5.5, "sigma": 0.5},
-                "Levant": {"mu": 5.5, "sigma": 0.5},
-                "Egypt": {"mu": 6.0, "sigma": 0.5},
+                "Asia Minor": LifespanConfig(mu=5.5, sigma=0.5),
+                "Levant": LifespanConfig(mu=5.5, sigma=0.5),
+                "Egypt": LifespanConfig(mu=6.0, sigma=0.5),
             },
             "paper": {
-                "Asia Minor": {"mu": 5.0, "sigma": 0.5},
-                "Levant": {"mu": 5.0, "sigma": 0.5},
-                "Egypt": {"mu": 5.5, "sigma": 0.5},
+                "Asia Minor": LifespanConfig(mu=5.0, sigma=0.5),
+                "Levant": LifespanConfig(mu=5.0, sigma=0.5),
+                "Egypt": LifespanConfig(mu=5.5, sigma=0.5),
             },
         }
     )
