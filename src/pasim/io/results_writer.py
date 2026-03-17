@@ -35,12 +35,9 @@ def write_temp_result(
 
     filename = f"run_{run_id}_{regime}.csv"
     file_path = temp_dir / filename
-    tmp_path = temp_dir / f"{filename}.tmp"
 
     majority_text_str = serialize_majority_text(majority_text_segments)
-    ideal_majority_text_str = (
-        serialize_majority_text(ideal_majority_text_segments) if ideal_majority_text_segments is not None else ""
-    )
+    ideal_majority_text_str = serialize_majority_text(ideal_majority_text_segments) if ideal_majority_text_segments is not None else ""
 
     fieldnames = [
         "run_id",
@@ -55,7 +52,7 @@ def write_temp_result(
         "pct_ideal_majority_disagree_autograph",
     ]
 
-    with open(tmp_path, "w", newline="") as f:
+    with open(file_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_NONNUMERIC)
         writer.writeheader()
         writer.writerow({
@@ -72,5 +69,3 @@ def write_temp_result(
             if pct_ideal_majority_disagree_autograph is not None
             else "",
         })
-
-    tmp_path.rename(file_path)

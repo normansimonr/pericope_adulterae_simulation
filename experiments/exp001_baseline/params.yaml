@@ -1,5 +1,5 @@
 total_ticks: 1255
-n_runs: 1000
+n_runs: 10
 max_retries: 3
 seed: null
 text_length: 100

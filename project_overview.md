@@ -264,12 +264,11 @@ The system supports two persistence levels via the `--persistence-level` CLI fla
 
 ### Parallel-Safe Aggregation
 
-Since simulations run in parallel, the system uses a distributed writing strategy and an incremental aggregation mechanism to avoid concurrent write contention and ensure data safety even if the process is interrupted:
+Since simulations run in parallel, the system uses a distributed writing strategy to avoid concurrent write contention on the final results file:
 
 1.  **Worker Phase**: Each parallel worker writes a unique temporary CSV file (e.g., `run_12_insertion.csv`) into a `temp_results/` directory within the experiment root. This ensures no two processes ever attempt to write to the same file.
-2.  **Incremental Aggregation**: Instead of waiting for the entire batch to finish, the orchestrator triggers an aggregation step as soon as any worker completes a run. This step merges new temporary files into the main `results.csv`, sorts the entries, and removes the processed temporary files.
-3.  **Concurrency Safety**: To prevent race conditions when multiple workers finish simultaneously, the aggregation process uses a **lock-file mechanism**. It employs a spin-lock with exclusive file creation (`results.csv.lock`) to ensure only one process modifies the main results file at a time.
-4.  **Resumption Support**: Because results are updated incrementally, any completed runs are immediately persisted. If a simulation is halted and restarted, the orchestrator detects these entries in `results.csv` and automatically skips them, resuming precisely where it left off.
+2.  **Aggregation Phase**: Once all parallel runs are complete, the orchestrator performs a final "merge" step. It reads all temporary files, concatenates them, sorts the data by `run_id` and `regime`, and writes the final `results.csv`.
+3.  **Cleanup**: The temporary directory is then deleted, leaving only the clean aggregated output.
 
 ### Persistent Artefacts (Full Level)
 
@@ -366,7 +365,7 @@ This module provides the worker-side logic for writing temporary, parallel-safe 
 
 This module implements the final aggregation step for Monte Carlo experiments.
 
--   **`aggregate_results`**: Scans the temporary results directory, incrementally merges all new individual run rows into the main `results.csv` file at the experiment root, sorts them deterministically by `run_id` and regime, and cleans up the processed temporary files. It uses a lock-file mechanism to ensure safety during parallel execution.
+-   **`aggregate_results`**: Scans the temporary results directory, merges all individual run rows into a single `results.csv` file at the experiment root, sorts them deterministically by `run_id` and regime (using a field list including the new analytical metrics), and cleans up the temporary files.
 
 ### `src/pasim/io/formats.py`
     -   `output.py`: For writing simulation outputs.
