@@ -387,6 +387,7 @@ def _select_parents_and_reputation(
         config=params,
         kdtree=region_kdtree,
         reputation_cache=state.instance_reputations,
+        age_cache=state.instance_birth_ticks,
     )
 
     # Determine reputation via inheritance
@@ -467,6 +468,7 @@ def _spawn_new_manuscripts_from_demand(
             state.alive_by_region[region].add(manuscript_id)
             state.manuscript_to_instance_map[manuscript_id] = instance_id
             state.instance_reputations[instance_id] = float(reputation)
+            state.instance_birth_ticks[instance_id] = current_tick
             spawned_this_tick.append(instance_id)
 
     _tag_innovator_nodes(state, spawned_this_tick, params)

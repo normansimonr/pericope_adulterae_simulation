@@ -34,6 +34,8 @@ class GenerationState:
     manuscript_to_instance_map: Dict[str, Any] = field(default_factory=dict)
     # Cache for instance reputations to avoid graph lookups during exemplar selection
     instance_reputations: Dict[str, float] = field(default_factory=dict)
+    # Cache for instance birth ticks for age-based sorting in exemplar selection
+    instance_birth_ticks: Dict[str, int] = field(default_factory=dict)
     # Counters for generating unique IDs
     manuscript_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))
     witness_id_counter: itertools.count = field(default_factory=lambda: itertools.count(1))

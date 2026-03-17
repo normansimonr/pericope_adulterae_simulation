@@ -152,6 +152,16 @@ To ensure realistic scribal behavior, the mutation system enforces a restriction
 
 This rule ensures that no-PA lineages remain stable, while PA-containing lineages can evolve, mutate, and even recover from internal omissions.
 
+### Exemplar Selection and Preference for Antiquity
+
+The process for choosing parent exemplars for a newly spawned manuscript is designed as a nuanced filter:
+
+1.  **Geographical Filtering**: Only manuscripts in the same geographical region as the new manuscript are considered. From this local pool, the 10 closest manuscripts (by Euclidean distance) are selected.
+2.  **Reputation and Age Ranking**: The selected candidates are then sorted using a multi-level priority system:
+    -   **Primary Priority**: Higher reputation score (1-5).
+    -   **Secondary Priority (Preference for Antiquity)**: Among manuscripts with equal reputation, **older manuscripts** (those with a lower `birth_tick`) are preferred. Scribes are modeled as seeking out "venerable" sources closer to the tradition's origin.
+3.  **Final Selection**: A random number of exemplars (`n`, typically 1-3) is drawn from a distribution, and the top `n` candidates from the sorted list are chosen as the parents.
+
 ### Reputation Inheritance and Authority Drift
 
 To model the historical persistence of textual authority, the simulation employs a reputation inheritance mechanism:

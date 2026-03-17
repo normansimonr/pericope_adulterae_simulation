@@ -52,6 +52,7 @@ def select_exemplars(
     config: SimulationConfig,
     kdtree: Optional[KDTree] = None,
     reputation_cache: Optional[Dict[WitnessInstanceID, float]] = None,
+    age_cache: Optional[Dict[WitnessInstanceID, int]] = None,
 ) -> List[WitnessInstanceID]:
     """
     Selects parent exemplars for a new manuscript.
@@ -67,6 +68,7 @@ def select_exemplars(
         config: The simulation configuration.
         kdtree: An optional pre-built KDTree for the `alive_manuscripts_in_region`.
         reputation_cache: An optional dictionary mapping instance IDs to reputations.
+        age_cache: An optional dictionary mapping instance IDs to birth ticks.
 
     Returns:
         A list of witness instance IDs chosen as exemplars.
@@ -95,11 +97,24 @@ def select_exemplars(
     # 2. Map manuscripts to witness instances
     candidate_instances = [manuscript_to_instance_map[ms.manuscript_id] for ms in closest_manuscripts]
 
-    # 3. Reputation-based Ranking
-    if reputation_cache is not None:
-        candidate_instances.sort(key=lambda inst_id: reputation_cache[inst_id], reverse=True)
-    else:
-        candidate_instances.sort(key=lambda inst_id: graph.nodes[inst_id]["reputation"], reverse=True)
+    # 3. Reputation-based Ranking (with Preference for Antiquity)
+    # Scribes prefer high reputation. If reputations are equal, they prefer
+    # older manuscripts (lower birth_tick).
+    def sort_key(inst_id: WitnessInstanceID) -> tuple[float, float]:
+        if reputation_cache is not None and age_cache is not None:
+            rep = reputation_cache[inst_id]
+            birth_tick = age_cache[inst_id]
+        else:
+            node = graph.nodes[inst_id]
+            rep = node["reputation"]
+            birth_tick = node["birth_tick"]
+
+        # We sort descending. Higher reputation comes first.
+        # For equal reputation, smaller birth_tick (older) comes first.
+        # So we use -birth_tick to make smaller values "larger" in descending sort.
+        return (rep, -birth_tick)
+
+    candidate_instances.sort(key=sort_key, reverse=True)
 
     # 4. Determine number of exemplars
     n = rng.choice([1, 2, 3], p=config.parent_num_distribution)
