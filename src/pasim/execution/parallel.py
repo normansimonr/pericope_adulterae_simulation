@@ -1,10 +1,12 @@
 import logging
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pasim.execution.run_plan import RunSpec, generate_run_plan
 from pasim.execution.runner import run_single
+from pasim.io.results_aggregator import aggregate_results
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,10 @@ def run_parallel(
                 else:
                     failed_runs_count += 1
                     failure_records.append(record)
+
+                # Aggregation: Update results.csv after each run (if in minimal mode)
+                aggregate_results(Path(params_path).parent)
+
             except Exception as exc:
                 failed_runs_count += 1
                 failure_records.append({"run_id": run_spec.run_id, "seed": run_spec.seed, "error": str(exc), "attempt": 0})
