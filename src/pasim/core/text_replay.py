@@ -24,6 +24,9 @@ class TextReplayEngine:
         self.intervention_applied = False
         self.innovator_id: Optional[str] = self._select_innovator()
 
+        # Map node IDs to their reputations for fast lookup during replay
+        self.node_reputations = {node.instance_id: node.reputation for node in snapshot.nodes}
+
         # Incremental Metric Tracking
         self.text_length = config.text_length
         self.autograph_text: Optional[np.ndarray] = None
@@ -143,10 +146,19 @@ class TextReplayEngine:
             text = make_initial_text(self.config)
         else:
             parent_texts = [self.instance_texts[pid] for pid in node.parent_ids]
+            parent_reps = [self.node_reputations[pid] for pid in node.parent_ids]
+
             reputation = node.reputation
             if is_innovator:
                 reputation = int(self.config.pa_innovator_reputation)
-            text = apply_scribal_rule(exemplar_texts=parent_texts, rng=rng, reputation=reputation, config=self.config)
+
+            text = apply_scribal_rule(
+                exemplar_texts=parent_texts,
+                rng=rng,
+                reputation=reputation,
+                config=self.config,
+                parent_reputations=parent_reps,
+            )
 
         if is_innovator:
             length = self.config.text_length

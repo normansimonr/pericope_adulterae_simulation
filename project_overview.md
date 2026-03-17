@@ -152,6 +152,30 @@ To ensure realistic scribal behavior, the mutation system enforces a restriction
 
 This rule ensures that no-PA lineages remain stable, while PA-containing lineages can evolve, mutate, and even recover from internal omissions.
 
+### Reputation Inheritance and Authority Drift
+
+To model the historical persistence of textual authority, the simulation employs a reputation inheritance mechanism:
+
+-   **Autograph Authority**: The autograph (root node) is always assigned the maximum reputation of `5.0`.
+-   **Inheritance Logic**: For all other witness instances, the child's reputation is derived from its parent(s). It inherits the **maximum reputation** among its selected exemplars.
+-   **Stochastic Drift**: To reflect gradual changes in scribal quality or tradition prestige, a "drift" is applied to the inherited reputation:
+    -   70% chance to remain the same.
+    -   15% chance to increase by 1.
+    -   15% chance to decrease by 1.
+    -   The final value is clipped to the legal range of [1, 5].
+
+This ensures that "prestige" traditions can persist over centuries rather than decaying immediately into the population average.
+
+### Weighted Majority Voting (Contamination)
+
+When a new witness is created from multiple parent exemplars (contamination), the base text is determined via **Weighted Majority Voting**:
+
+-   **Weighting Factor**: Each parent's contribution to a segment's reading is weighted by its **reputation score** (1-5).
+-   **Decision Rule**: For each segment, the reading with the highest sum of weights across all parents is selected.
+-   **Tie-Breaking**: If multiple readings share the highest weighted sum, one is chosen randomly using the simulation's deterministic RNG.
+
+This mechanism ensures that high-authority manuscripts have a proportionally greater influence on the resulting tradition, preventing elite readings from being easily outvoted by lower-quality sources.
+
 ### Simulation Execution Layers
 
 The simulation is split into two distinct functional layers to ensure modularity and reproducibility:

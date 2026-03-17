@@ -56,6 +56,7 @@ from pasim.core.genealogy import add_child_node, add_root_node, validate_genealo
 from pasim.core.genealogy_snapshot import GenealogyNode, GenealogySnapshot
 from pasim.core.historical_events import HistoricalEventManager
 from pasim.core.material_transition_manager import MaterialTransitionManager
+from pasim.core.reputation import sample_inherited_reputation
 from pasim.core.script_transition_manager import ScriptTransitionManager
 from pasim.core.simulation_state import GenerationState, initialise_generation_state
 from pasim.core.spatial import generate_random_coordinates
@@ -258,10 +259,6 @@ def _generate_batch_spawn_properties(
     locations_x = rng.uniform(x_bounds[0], x_bounds[1], size=n_to_spawn)
     locations_y = rng.uniform(y_bounds[0], y_bounds[1], size=n_to_spawn)
 
-    reputation_scores = list(params.reputation_distribution.keys())
-    reputation_probs = list(params.reputation_distribution.values())
-    batch_reputations = rng.choice(reputation_scores, p=reputation_probs, size=n_to_spawn)
-
     material_dist = material_transition_manager.get_active_distribution(current_tick)
     batch_materials = rng.choice(material_dist["materials"], p=material_dist["probabilities"], size=n_to_spawn)
 
@@ -284,7 +281,6 @@ def _generate_batch_spawn_properties(
     return {
         "locations_x": locations_x,
         "locations_y": locations_y,
-        "reputations": batch_reputations,
         "materials": batch_materials,
         "scripts": batch_scripts,
         "lifespans": batch_lifespans,
@@ -326,28 +322,8 @@ def _handle_spawned_witness_node(
             reputation=reputation,
         )
     else:
-        # No local exemplars found, but the graph is not empty.
-        all_alive_instance_ids = [
-            state.manuscript_to_instance_map[ms_id] for ms_id in state.alive_manuscripts if ms_id in state.manuscript_to_instance_map
-        ]
-
-        if not all_alive_instance_ids:
-            raise ValueError("No alive instances to select parents from.")
-
-        num_parents_choice = rng.choice([1, 2, 3], p=params.parent_num_distribution)
-        num_parents = min(num_parents_choice, len(all_alive_instance_ids))
-
-        random_parents = rng.choice(all_alive_instance_ids, size=num_parents, replace=False).tolist()
-
-        add_child_node(
-            graph=state.graph,
-            node_id=instance_id,
-            parent_node_ids=random_parents,
-            witness_id=witness_id,
-            manuscript_id=manuscript_id,
-            birth_tick=current_tick,
-            reputation=reputation,
-        )
+        # This branch should rarely be hit now that parent selection is handled in _spawn_new_manuscripts_from_demand
+        raise RuntimeError("No exemplars provided for non-root node.")
 
 
 def _handle_cultural_replacement(
@@ -392,6 +368,48 @@ def _get_intervention_targets(config: SimulationConfig) -> List[tuple[int, Regio
     return list(targets)
 
 
+def _select_parents_and_reputation(
+    state: GenerationState,
+    manuscript: Manuscript,
+    region_kdtree: Optional[KDTree],
+    alive_by_region_objects: Dict[Region, List[Manuscript]],
+    params: SimulationConfig,
+    rng: RNG,
+) -> Tuple[List[str], int]:
+    """Selects parents and determines reputation for a new manuscript."""
+    region = manuscript.region
+    exemplars = select_exemplars(
+        new_manuscript=manuscript,
+        alive_manuscripts_in_region=alive_by_region_objects.get(region, []),
+        graph=state.graph,
+        manuscript_to_instance_map=state.manuscript_to_instance_map,
+        rng=rng,
+        config=params,
+        kdtree=region_kdtree,
+        reputation_cache=state.instance_reputations,
+    )
+
+    # Determine reputation via inheritance
+    if exemplars:
+        parent_reps = [int(state.instance_reputations[pid]) for pid in exemplars]
+        reputation = sample_inherited_reputation(parent_reps, rng)
+    elif state.graph.number_of_nodes() == 0:
+        # Autograph: always max reputation
+        reputation = 5
+    else:
+        # No local exemplars, will inherit from random global parents
+        all_alive_instance_ids = [
+            state.manuscript_to_instance_map[ms_id] for ms_id in state.alive_manuscripts if ms_id in state.manuscript_to_instance_map
+        ]
+        num_parents_choice = rng.choice([1, 2, 3], p=params.parent_num_distribution)
+        num_parents = min(num_parents_choice, len(all_alive_instance_ids))
+        exemplars = rng.choice(all_alive_instance_ids, size=num_parents, replace=False).tolist()
+        parent_reps = [int(state.instance_reputations[pid]) for pid in exemplars]
+        reputation = sample_inherited_reputation(parent_reps, rng)
+
+    return exemplars, reputation
+
+
 def _spawn_new_manuscripts_from_demand(
     state: GenerationState,
     demand_today: Dict[Region, int],
@@ -413,9 +431,6 @@ def _spawn_new_manuscripts_from_demand(
         stock_count = len(state.alive_by_region[region])
         n_to_spawn = demanded_count - stock_count
 
-        # RULE: Force-spawn at least one new manuscript if this is an intervention target
-        # BUT only if the regional demand for that tick is > 0.
-        # This prevents spawning in regions where demand is explicitly zero (e.g. Egypt in later centuries).
         if (current_tick, region) in intervention_targets and demanded_count > 0:
             n_to_spawn = max(n_to_spawn, 1)
 
@@ -429,8 +444,6 @@ def _spawn_new_manuscripts_from_demand(
 
         for i in range(n_to_spawn):
             manuscript_id = f"M{next(state.manuscript_id_counter)}"
-            reputation = int(props["reputations"][i])
-
             manuscript = Manuscript(
                 manuscript_id=manuscript_id,
                 birth_tick=current_tick,
@@ -441,35 +454,22 @@ def _spawn_new_manuscripts_from_demand(
             )
             state.registries.manuscripts.add(manuscript)
 
-            exemplars = select_exemplars(
-                new_manuscript=manuscript,
-                alive_manuscripts_in_region=alive_by_region_objects.get(region, []),
-                graph=state.graph,
-                manuscript_to_instance_map=state.manuscript_to_instance_map,
-                rng=rng,
-                config=params,
-                kdtree=region_kdtree,
-                reputation_cache=state.instance_reputations,
-            )
+            exemplars, reputation = _select_parents_and_reputation(state, manuscript, region_kdtree, alive_by_region_objects, params, rng)
 
             witness_id = f"W{next(state.witness_id_counter)}"
             instance_id = f"I{next(state.witness_instance_id_counter)}"
             state.registries.witnesses.add(Witness(witness_id=witness_id, manuscript_id=manuscript_id, script=props["scripts"][i]))
 
             _handle_spawned_witness_node(state, instance_id, witness_id, manuscript_id, current_tick, reputation, exemplars, params, rng)
-
             _handle_cultural_replacement(state, props["scripts"][i], exemplars, current_tick, params, rng, instance_id)
 
             state.alive_manuscripts.add(manuscript_id)
             state.alive_by_region[region].add(manuscript_id)
             state.manuscript_to_instance_map[manuscript_id] = instance_id
-            state.instance_reputations[instance_id] = reputation
+            state.instance_reputations[instance_id] = float(reputation)
             spawned_this_tick.append(instance_id)
 
-    # RULE: Deterministic Innovator Selection
-    # If this tick matches any PA intervention year, identify and tag the innovator nodes.
     _tag_innovator_nodes(state, spawned_this_tick, params)
-
     return state
 
 

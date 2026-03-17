@@ -24,7 +24,7 @@ witness instance, which has been influenced by both its ancestry (contamination)
 and the scribal process itself (error).
 """
 
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -39,6 +39,7 @@ def apply_scribal_rule(
     rng: np.random.Generator,
     reputation: int,
     config: SimulationConfig,
+    parent_reputations: Optional[List[int]] = None,
 ) -> np.ndarray:
     """
     Produces a new, copied and mutated tagged string from one or more exemplars.
@@ -55,6 +56,9 @@ def apply_scribal_rule(
         reputation: The integer reputation level (1-5) of the scribe/witness,
                     which determines the error intensity.
         config: The simulation configuration object.
+        parent_reputations: An optional list of integer reputation scores (1-5)
+                            corresponding to each parent text. Required if there
+                            are multiple exemplars.
 
     Returns:
         A new tagged string representing the final, potentially mutated text.
@@ -66,7 +70,9 @@ def apply_scribal_rule(
     if len(exemplar_texts) == 1:
         base_text = copy_from_single_exemplar(exemplar_texts[0])
     else:
-        base_text = majority_from_exemplars(exemplar_texts, rng)
+        if parent_reputations is None:
+            raise ValueError("parent_reputations must be provided for multiple exemplars.")
+        base_text = majority_from_exemplars(exemplar_texts, parent_reputations, rng)
 
     # Stage 2: Error Intensity Determination
     proportion = expected_mutation_proportion(reputation, config.reputation_mutation_mapping)

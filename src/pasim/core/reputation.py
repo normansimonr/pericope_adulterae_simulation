@@ -96,3 +96,40 @@ def sample_reputation(rng: np.random.Generator, reputation_distribution: Dict[in
 
     sampled_reputation = rng.choice(reputation_scores, p=probabilities)
     return int(sampled_reputation)
+
+
+def sample_inherited_reputation(
+    parent_reputations: list[int],
+    rng: np.random.Generator,
+) -> int:
+    """
+    Samples a child's reputation based on its parents' reputations with drift.
+
+    This function implements reputation inheritance, where a child's reputation
+    is biased toward the maximum reputation of its parent exemplars. It applies
+    a stochastic "drift" (70% chance to stay the same, 15% to increase by 1,
+    15% to decrease by 1), clipped to the [1, 5] range.
+
+    If no parents are provided, this function defaults to the maximum
+    reputation (5), assuming it's being called for the autograph/root.
+
+    Args:
+        parent_reputations: A list of integer reputation scores from parent exemplars.
+        rng: The seeded random number generator.
+
+    Returns:
+        An integer representing the inherited (and potentially drifted) reputation.
+    """
+    if not parent_reputations:
+        # Default for autograph/root node
+        return 5
+
+    # Inherit from the best available source
+    base_rep = max(parent_reputations)
+
+    # Apply stochastic drift (-1, 0, +1)
+    drift = rng.choice([-1, 0, 1], p=[0.15, 0.70, 0.15])
+    child_rep = base_rep + drift
+
+    # Clip to legal range [1, 5]
+    return int(np.clip(child_rep, 1, 5))
