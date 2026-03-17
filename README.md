@@ -2,7 +2,6 @@
 
 `pasim` is a scientific simulation framework designed to model the historical transmission and evolution of the *Pericope Adulterae* (PA). It simulates manuscript genealogies, regional migration, historical shocks (like persecutions), and the gradual transition of writing materials and script styles.
 
-
 ## Installation
 
 This project uses [Poetry](https://python-poetry.org/) for dependency management and packaging.
