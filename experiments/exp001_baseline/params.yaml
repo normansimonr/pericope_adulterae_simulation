@@ -3,8 +3,8 @@ n_runs: 1000
 max_retries: 3
 seed: null
 text_length: 100
-p_region_migration: 0.07
-p_internal_relocation: 0.03
+p_region_migration: 0.04
+p_internal_relocation: 0.04
 p_uncial_exemplar_death_on_minuscule_birth: 0.3
 reputation_distribution:
   1: 0.1
@@ -14,11 +14,11 @@ reputation_distribution:
   5: 0.02
 pa_regime_configs:
   insertion:
-    pa_intervention_year: 150
+    pa_intervention_year: 130
     pa_intervention_region: "Asia Minor"
     pa_innovator_reputation: 5.0
   omission:
-    pa_intervention_year: 150
+    pa_intervention_year: 130
     pa_intervention_region: "Egypt"
     pa_innovator_reputation: 5.0
 persecutions:

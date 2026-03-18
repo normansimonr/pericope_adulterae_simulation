@@ -58,6 +58,9 @@ Example with full persistence:
 poetry run pasim run experiments/exp001_baseline/params.yaml --persistence-level full
 ```
 
+**Note: We recommend using full persistence in small batches only. If run in large batches, the artifacts may fill up your hard disk and cause your operating system to collapse.**
+
+
 ### 3. Inspect results
 - **Aggregated Results**: Found in the experiment root, e.g., `experiments/exp001_baseline/results.csv`.
 - **Detailed Artefacts**: (If using `full` persistence) Found in `experiments/exp001_baseline/runs/run_N/`.
