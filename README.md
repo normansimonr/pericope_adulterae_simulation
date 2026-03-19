@@ -2,6 +2,8 @@
 
 `pasim` is a scientific simulation framework designed to model the historical transmission and evolution of the *Pericope Adulterae* (PA). It simulates manuscript genealogies, regional migration, historical shocks (like persecutions), and the gradual transition of writing materials and script styles.
 
+If you are looking for the experiment results as published in the accompanying paper, those are inside ´experiments/exp001_baseline´.
+
 
 ## Installation
 
