@@ -11,7 +11,7 @@ This project uses [Poetry](https://python-poetry.org/) for dependency management
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/normansimonr/pericope_adulterae_simulation.git
+    git clone <repository-url>
     cd pericope_adulterae_simulation
     ```
 

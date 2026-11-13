@@ -31,9 +31,6 @@ data/
 *.prof
 profile_stats.prof
 
-# Agent tooling and commands
-.gemini/
-
 # Archives and uploads
 *.zip
 
