@@ -2,7 +2,7 @@
 
 This document provides an overview of the `pasim` project, outlining its purpose, architectural structure, and general functioning.
 
-This context is read by GEMINI CLI at each session start.
+It is intended for contributors and reviewers of the repository.
 
 ## Purpose
 
