@@ -28,17 +28,37 @@ data/
 *.log
 *.tmp
 *.swp
-profile_stats.prof # Added to ignore profiling output
+*.prof
+profile_stats.prof
+
+# Agent tooling and commands
+.gemini/
+
+# Archives and uploads
+*.zip
+
+# Generated experiment outputs
+temp_results/
+experiments/*/runs/
+experiments/*/results.csv
+experiments/*/experiment_metadata.json
+*.parquet
+*.sqlite
+*.db
+
+# Secrets and credentials
+.env.*
+*.pem
+*.key
 
 # Poetry
 .pdm.toml
 .pdm-python
 pdm.lock
 
-# Caches
+# Caches and coverage
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-
-# Experiment Runs
-experiments/*/runs/
+.coverage
+htmlcov/

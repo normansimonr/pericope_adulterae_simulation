@@ -2,7 +2,7 @@
 name = "pasim"
 version = "0.1.0"
 description = "A scientific simulation framework."
-authors = ["Your Name <your@email.com>"]
+authors = ["Pericope Adulterae Simulation contributors"]
 license = "MIT"
 readme = "README.md"
 
